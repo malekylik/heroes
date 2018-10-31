@@ -13,6 +13,11 @@ export class Canvas {
     return this._gl;
   }
 
+  setSize(width: number, height: number): void {
+    this._canvasHTML.style.width = `${width}px`;
+    this._canvasHTML.style.height = `${height}px`;
+  }
+
   static getCanvas(): Canvas {
     if (!Canvas.canvas) {
       const canvasHTML: HTMLCanvasElement = document.createElement('canvas');
