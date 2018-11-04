@@ -1,7 +1,10 @@
+import * as glm from 'glm-js'
+
 export class Canvas {
 
   private readonly _canvasHTML: HTMLCanvasElement;
   private readonly _gl: WebGLRenderingContext;
+  private bgColor: any = glm.vec4(0.0, 0.0, 0.0, 1.0);
 
   private static canvas: Canvas;
 
@@ -11,6 +14,15 @@ export class Canvas {
 
   get gl(): WebGLRenderingContext {
     return this._gl;
+  }
+
+  clear(): void {
+    this._gl.clear(this._gl.COLOR_BUFFER_BIT);
+  }
+
+  setColor(rgba: any): void {
+    this._gl.clearColor(rgba.r, rgba.g, rgba.b, rgba.a);
+    this.bgColor = rgba;
   }
 
   setSize(width: number, height: number): void {

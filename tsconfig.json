@@ -2,7 +2,7 @@
     "compilerOptions": {
         "outDir": "./dist",
         "target": "ES6",
-        "module": "ES2015",
+        "module": "commonJS",
         "noImplicitAny": true,
         "noImplicitThis": true,
         "noImplicitReturns": true,
