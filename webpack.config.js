@@ -35,6 +35,7 @@ module.exports = {
     }),
     new CleanWebpackPlugin(['dist'], {
       verbose: false,
+      exclude: ['src'],
     }),
     new CheckerPlugin()
   ],
