@@ -7,17 +7,17 @@ const canvas: Canvas = Canvas.getCanvas();
 const gl: WebGLRenderingContext = canvas.gl;
 const width: number = window.innerWidth;
 const height: number = window.innerHeight;
-const bgColor: any = glm.vec4(0.0, 0.5, 0.0, 1.0);
-const perspective: any = glm.perspective(glm.radians(90), width / height, 1, 1000);
-const translate: any = glm.translate(glm.vec3(0, 0, -200 ));
-const path: string = './src/groza_obj.obj';
+const bgColor: glm.vec4 = glm.vec4(0.0, 0.5, 0.0, 1.0);
+const perspective: glm.mat4 = glm.perspective(glm.radians(90), width / height, 1, 1000);
+const translate: glm.mat4 = glm.translate(glm.vec3(0, -100, -2 ));
+const path: string = './src/IronMan.obj';
 const A_POSITION: string = 'a_Position';
 const PERSPECTIVE: string = 'perspective';
 const TRANSLATE: string = 'translate';
 const ROTATION: string = 'rotation';        
-let rotation: any = glm.toMat4(glm.angleAxis(glm.radians(45), glm.vec3(0, 1, 1)));
+let rotation: glm.mat4 = glm.toMat4(glm.angleAxis(glm.radians(45), glm.vec3(0, 1, 1)));
 let verticesCoord: Float32Array;
-let obj: any;
+let obj: OBJ.Mesh;
 
 const VSHADER_SOURCE: string =
   `uniform mat4 ${TRANSLATE}; \n
@@ -105,7 +105,7 @@ async function start(): Promise<void> {
   const stringObj: string = await response.text();
   
   obj = new OBJ.Mesh(stringObj);
-
+  
   requestAnimationFrame(main);
 }
 

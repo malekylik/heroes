@@ -4,11 +4,11 @@ export class Canvas {
 
   private readonly _canvasHTML: HTMLCanvasElement;
   private readonly _gl: WebGLRenderingContext;
-  private _bgColor: any = glm.vec4(0.0, 0.0, 0.0, 1.0);
+  private _bgColor: glm.vec4 = glm.vec4(0.0, 0.0, 0.0, 1.0);
 
   private static canvas: Canvas;
 
-  get bgColor(): any {
+  get bgColor(): glm.vec4 {
     return this._bgColor;
   }
 
@@ -28,7 +28,7 @@ export class Canvas {
     this._gl.enable(this._gl.DEPTH_TEST);
   }
 
-  setColor(rgba: any): void {
+  setColor(rgba: glm.vec4): void {
     this._gl.clearColor(rgba.r, rgba.g, rgba.b, rgba.a);
     this._bgColor = rgba;
   }
