@@ -1,4 +1,4 @@
 package-lock.json
 node_modules  
-src\models
+src/models
 dist
