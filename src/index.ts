@@ -1,6 +1,9 @@
 import * as glm from 'glm-js';
 import * as OBJ from 'webgl-obj-loader';
 
+import { fromEvent, Observable, Subscription } from 'rxjs';
+import { map } from 'rxjs/operators';
+
 import { Canvas } from './render/canvas/canvas';
 
 enum Keys { W = 119, A = 97, S = 115, D = 100 };
@@ -21,9 +24,13 @@ const ROTATION: string = 'rotation';
 const VIEW: string = 'view';
 
 const cameraPos: glm.vec3 = glm.vec3(0, 0, 200);
-const cameraFront: glm.vec3 = glm.vec3(0, 0, -3);
 const cameraUp: glm.vec3 = glm.vec3(0, 1, 0);
 const cameraSpeed: number = 10;
+const sensetivity: number = 0.5;
+
+let cameraFront: glm.vec3 = glm.vec3(0, 0, -3);
+let pitch: number = 0;
+let yaw: number = 0;
 
 let view: glm.mat4 = glm.lookAt(cameraPos, cameraPos['+'](cameraFront), cameraUp);
 let rotation: glm.mat4 = glm.toMat4(glm.angleAxis(glm.radians(45), glm.vec3(0, 1, 1)));
@@ -136,14 +143,47 @@ canvas.setColor(bgColor);
 canvas.enableDepthTest();
 canvas.setSize(width, height);
 canvas.canvasHTML.setAttribute('tabindex', '0');
-canvas.canvasHTML.addEventListener('keypress', (ev: KeyboardEvent) => {
-  switch (ev.keyCode) {
-    case Keys.W: cameraPos['+='](cameraFront['*'](cameraSpeed)); break;
-    case Keys.A: cameraPos['-='](glm.normalize(glm.cross(cameraFront, cameraUp))['*'](cameraSpeed)); break;
-    case Keys.S: cameraPos['-='](cameraFront['*'](cameraSpeed)); break;
-    case Keys.D: cameraPos['+='](glm.normalize(glm.cross(cameraFront, cameraUp))['*'](cameraSpeed)); break;
-  }
-  
-});
+
+const source: Observable<Event> = fromEvent(canvas.canvasHTML, 'keypress');
+const keyboardEventSubscription: Subscription = source
+  .pipe(
+    map((ev: KeyboardEvent) => ev.keyCode),
+  )
+  .subscribe((keyCode: number) => {
+    switch (keyCode) {
+      case Keys.W: cameraPos['+='](cameraFront['*'](cameraSpeed)); break;
+      case Keys.A: cameraPos['-='](glm.normalize(glm.cross(cameraFront, cameraUp))['*'](cameraSpeed)); break;
+      case Keys.S: cameraPos['-='](cameraFront['*'](cameraSpeed)); break;
+      case Keys.D: cameraPos['+='](glm.normalize(glm.cross(cameraFront, cameraUp))['*'](cameraSpeed)); break;
+    }
+  });
+
+let lastX: number = 0;
+let lastY: number = 0;
+
+const mouseEventSubscription: Subscription = fromEvent(canvas.canvasHTML, 'mousemove')
+  .pipe(
+    map((ev: MouseEvent) => ev),
+  )
+  .subscribe((ev: MouseEvent) => {
+    const xOffset: number = (ev.clientX - lastX) * sensetivity;
+    const yOffset: number = (ev.clientY - lastY) * sensetivity;
+    
+    lastX = ev.clientX;
+    lastY = ev.clientY;
+
+    yaw += xOffset;
+    pitch -= yOffset;
+    
+    if(pitch > 89) pitch = 89;
+    if(pitch < -89) pitch = -89;
+    
+    cameraFront.x = Math.cos(glm.radians(pitch)) * Math.cos(glm.radians(yaw))
+    cameraFront.y = Math.sin(glm.radians(pitch));
+    cameraFront.z = Math.cos(glm.radians(pitch)) * Math.sin(glm.radians(yaw))
+    cameraFront = glm.normalize(cameraFront);
+
+    view = glm.lookAt(cameraPos, cameraPos['+'](cameraFront), cameraUp);
+  });
 
 start();
