@@ -1,28 +1,21 @@
-import * as glm from 'glm-js'
+import * as glm from 'glm-js';
 
-export class Camera {
+import { Subject } from 'rxjs';
+import { distinctUntilChanged } from 'rxjs/operators';
 
-    private _cameraPos: glm.vec3 = glm.vec3(0, 0, 200);
-    private _cameraUp: glm.vec3 = glm.vec3(0, 1, 0);
-    private _cameraFront: glm.vec3 = glm.vec3(0, 0, -3);
-    private _cameraSpeed: number = 10;
-    private _sensetivity: number = 0.5;
+export abstract class Camera implements Updateable {
+
+    private _cameraPos: glm.vec3;
+    private _cameraUp: glm.vec3;
+    private _cameraFront: glm.vec3;
     private _view: glm.mat4;
-    private _pitch: number = 0;
-    private _yaw: number = 0;
-    private _mousePosX: number = 0;
-    private _mousePosY: number = 0;
+    private _cameraSpeed: number;
+    private _mouseSpeed: number;
+    private flagUpdater: Subject<boolean> = new Subject();
+    protected updateFlag: boolean = false;
 
     get view(): glm.mat4 {
         return this._view;
-    }
-
-    get pitch(): number {
-        return this._pitch;
-    }
-
-    get yaw(): number {
-        return this._yaw;
     }
 
     get cameraPos(): glm.vec3 {
@@ -37,115 +30,101 @@ export class Camera {
         return this._cameraFront;
     }
 
-    get sensetivity(): number {
-        return this._sensetivity;
+    get mouseSpeed(): number {
+        return this._mouseSpeed;
     }
 
     get cameraSpeed(): number {
         return this._cameraSpeed;
     }
 
-    get mousePosX(): number {
-        return this.mousePosX;
-    }
-    
-    get mousePosY(): number {
-        return this.mousePosY;
-    }
-
     set view(view: glm.mat4) {
         this._view = view;
+        this.flagUpdater.next(true);
     }
 
     set cameraPos(cameraPos: glm.vec3) {
         this._cameraPos = cameraPos;
+        this.flagUpdater.next(true);
     }
 
     set cameraUp(cameraUp: glm.vec3) {
         this._cameraUp = cameraUp;
+        this.flagUpdater.next(true);
     }
 
     set cameraFront(cameraFront: glm.vec3) {
         this._cameraFront = cameraFront;
+        this.flagUpdater.next(true);
     }
 
     set cameraSpeed(cameraSpeed: number) {
         this._cameraSpeed = cameraSpeed;
     }
 
-    set sensetivity(sensetivity: number) {
-        this._sensetivity = sensetivity;
+    set mouseSpeed(mouseSpeed: number) {
+        this._mouseSpeed = mouseSpeed;
     }
 
-    set pitch(pitch: number) {
-        this._pitch = pitch;
+    moveForward(distance: number = this._cameraSpeed): void {
+        this._cameraPos['+='](this._cameraFront['*'](distance));
+        this.flagUpdater.next(true);
     }
 
-    set yaw(yaw: number) {
-        this._yaw = yaw;
+    moveLeft(distance: number = this._cameraSpeed): void {
+        this._cameraPos['-='](glm.normalize(glm.cross(this._cameraFront, this._cameraUp))['*'](distance));
+        this.flagUpdater.next(true);
     }
 
-    set mousePosX(posX: number) {
-        this._mousePosX = posX;
-    }
-    
-    set mousePosY(posY: number) {
-        this._mousePosY = posY;
+    moveRight(distance: number = this._cameraSpeed): void {
+        this._cameraPos['+='](glm.normalize(glm.cross(this._cameraFront, this._cameraUp))['*'](distance));
+        this.flagUpdater.next(true);
     }
 
-    updateView(): void {
-        this._view = glm.lookAt(this._cameraPos, this._cameraPos['+'](this._cameraFront), this._cameraUp);
+    moveBack(distance: number = this._cameraSpeed): void {
+        this._cameraPos['-='](this._cameraFront['*'](distance));
+        this.flagUpdater.next(true);
     }
 
-    moveForward(): void {
-        this._cameraPos['+='](this._cameraFront['*'](this._cameraSpeed));
+    moveUp(distance: number = this._cameraSpeed): void {
+        this._cameraPos['+='](this.cameraUp['*'](distance));
+        this.flagUpdater.next(true);
     }
 
-    moveLeft(): void {
-        this._cameraPos['-='](glm.normalize(glm.cross(this._cameraFront, this._cameraUp))['*'](this._cameraSpeed));
-    }
-
-    moveRight(): void {
-        this._cameraPos['+='](glm.normalize(glm.cross(this._cameraFront, this._cameraUp))['*'](this._cameraSpeed));
-    }
-
-    moveBack(): void {
-        this._cameraPos['-='](this._cameraFront['*'](this._cameraSpeed));
+    moveDown(distance: number = this._cameraSpeed): void {
+        this._cameraPos['-='](this.cameraUp['*'](distance));
+        this.flagUpdater.next(true);
     }
 
     moveMouse(x: number, y: number): void {
-        const xOffset: number = (x - this._mousePosX) * this._sensetivity;
-        const yOffset: number = (y - this._mousePosY) * this._sensetivity;
-
-        this._mousePosX = x;
-        this._mousePosY = y;
-
-        this._yaw += xOffset;
-        this._pitch -= yOffset;
-
-        if (this._pitch > 89) this._pitch = 89;
-        if (this._pitch < -89) this._pitch = -89;
-
-        this._cameraFront.x = Math.cos(glm.radians(this._pitch)) * Math.cos(glm.radians(this._yaw))
-        this._cameraFront.y = Math.sin(glm.radians(this._pitch));
-        this._cameraFront.z = Math.cos(glm.radians(this._pitch)) * Math.sin(glm.radians(this._yaw))
-        this._cameraFront = glm.normalize(this._cameraFront);
-
-        this.updateView();
+        this.flagUpdater.next(true);
     }
+
+    protected updateView(): void {
+        this._view = glm.lookAt(this._cameraPos, this._cameraPos['+'](this._cameraFront), this._cameraUp);
+        this.flagUpdater.next(false);
+    }
+
+    abstract updateKeyboard(ev: KeyboardEvent): void;
+    abstract updateMouse(ev: MouseEvent): void;
+    abstract update(): void;
 
     constructor(cameraPos: glm.vec3 = glm.vec3(0, 0, 200),
         cameraUp: glm.vec3 = glm.vec3(0, 1, 0),
         cameraFront: glm.vec3 = glm.vec3(0, 0, -3),
-        cameraSpeed: number = 10,
-        sensetivity: number = 0.5
+        cameraSpeed: number = 2,
+        mouseSpeed: number = 5
     ) {
         this._cameraPos = cameraPos;
         this._cameraUp = cameraUp;
         this._cameraFront = cameraFront;
         this._cameraSpeed = cameraSpeed;
-        this._sensetivity = sensetivity;
+        this._mouseSpeed = mouseSpeed;
         this.updateView();
+
+        this.flagUpdater
+            .pipe(distinctUntilChanged())
+            .subscribe((flag: boolean) => this.updateFlag = flag);
     }
 
 }

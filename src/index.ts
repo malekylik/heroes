@@ -5,9 +5,9 @@ import { fromEvent, Observable, Subscription } from 'rxjs';
 import { map } from 'rxjs/operators';
 
 import { Canvas } from './render/canvas/canvas';
-import { Camera } from './render/camera/camera';
-
-enum Keys { W = 119, A = 97, S = 115, D = 100 };
+import { Camera }  from './render/camera/camera';
+import { Camera2D } from './render/camera/camera2d';
+import { Camera3D } from './render/camera/camera3d';
 
 const canvas: Canvas = Canvas.getCanvas();
 const gl: WebGLRenderingContext = canvas.gl;
@@ -24,7 +24,7 @@ const TRANSLATE: string = 'translate';
 const ROTATION: string = 'rotation';
 const VIEW: string = 'view';
 
-const camera: Camera = new Camera();
+const camera: Camera = new Camera3D();
 let rotation: glm.mat4 = glm.toMat4(glm.angleAxis(glm.radians(45), glm.vec3(0, 1, 1)));
 let verticesCoord: Float32Array;
 let obj: OBJ.Mesh;
@@ -85,29 +85,13 @@ function createProgram(vShader: string, fShader: string): WebGLProgram {
 }
 
 function render(time: number): void {
-  const vertexBuffer: WebGLBuffer = gl.createBuffer();
-  const indicesBuffer: WebGLBuffer = gl.createBuffer();
-
   rotation = glm.toMat4(glm.angleAxis(glm.radians(time / 20), glm.vec3(0, 1, 0)));
+  camera.update();
   gl.uniformMatrix4fv(rotationUniformLocation, false, rotation.elements);
-
-  camera.updateView();
   gl.uniformMatrix4fv(viewUniformLocation, false, camera.view.elements);
-
-  verticesCoord = new Float32Array(obj.vertices);
-
-  gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
-  gl.bufferData(gl.ARRAY_BUFFER, verticesCoord, gl.STATIC_DRAW);
-  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indicesBuffer);
-  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(obj.indices), gl.STATIC_DRAW);
-  gl.vertexAttribPointer(a_Position, 3, gl.FLOAT, false, 0, 0);
-  gl.enableVertexAttribArray(a_Position);
 
   canvas.clear();
   gl.drawElements(gl.TRIANGLES, obj.indices.length, gl.UNSIGNED_SHORT, 0);
-
-  gl.deleteBuffer(vertexBuffer);
-  gl.deleteBuffer(indicesBuffer);
 }
 
 function main(time: number) {
@@ -120,6 +104,19 @@ async function start(): Promise<void> {
   const stringObj: string = await response.text();
 
   obj = new OBJ.Mesh(stringObj);
+
+  const vertexBuffer: WebGLBuffer = gl.createBuffer();
+  const indicesBuffer: WebGLBuffer = gl.createBuffer();
+
+
+  verticesCoord = new Float32Array(obj.vertices);
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, verticesCoord, gl.STATIC_DRAW);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indicesBuffer);
+  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(obj.indices), gl.STATIC_DRAW);
+  gl.vertexAttribPointer(a_Position, 3, gl.FLOAT, false, 0, 0);
+  gl.enableVertexAttribArray(a_Position);
 
   requestAnimationFrame(main);
 }
@@ -139,15 +136,10 @@ canvas.canvasHTML.setAttribute('tabindex', '0');
 const source: Observable<Event> = fromEvent(canvas.canvasHTML, 'keypress');
 const keyboardEventSubscription: Subscription = source
   .pipe(
-    map((ev: KeyboardEvent) => ev.keyCode),
+    map((ev: KeyboardEvent) => ev),
   )
-  .subscribe((keyCode: number) => {
-    switch (keyCode) {
-      case Keys.W: camera.moveForward(); break;
-      case Keys.A: camera.moveLeft(); break;
-      case Keys.S: camera.moveBack(); break;
-      case Keys.D: camera.moveRight(); break;
-    }
+  .subscribe((ev: KeyboardEvent) => {
+    camera.updateKeyboard(ev);
   });
 
 const mouseEventSubscription: Subscription = fromEvent(canvas.canvasHTML, 'mousemove')
@@ -155,7 +147,7 @@ const mouseEventSubscription: Subscription = fromEvent(canvas.canvasHTML, 'mouse
     map((ev: MouseEvent) => ev),
   )
   .subscribe((ev: MouseEvent) => {
-    camera.moveMouse(ev.clientX, ev.clientY);
+    camera.updateMouse(ev);
   });
 
 start();
