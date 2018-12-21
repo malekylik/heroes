@@ -5,7 +5,7 @@ import { fromEvent, Observable, Subscription } from 'rxjs';
 import { map } from 'rxjs/operators';
 
 import { Canvas } from './render/canvas/canvas';
-import { Camera }  from './render/camera/camera';
+import { Camera } from './render/camera/camera';
 import { Camera2D } from './render/camera/camera2d';
 import { Camera3D } from './render/camera/camera3d';
 
@@ -133,8 +133,15 @@ canvas.enableDepthTest();
 canvas.setSize(width, height);
 canvas.canvasHTML.setAttribute('tabindex', '0');
 
-const source: Observable<Event> = fromEvent(canvas.canvasHTML, 'keypress');
-const keyboardEventSubscription: Subscription = source
+const keyboardEventSubscription: Subscription = fromEvent(canvas.canvasHTML, 'keyup')
+  .pipe(
+    map((ev: KeyboardEvent) => ev),
+  )
+  .subscribe((ev: KeyboardEvent) => {
+    camera.updateKeyboard(ev);
+  });
+
+const keyboardEventSubscription2: Subscription = fromEvent(canvas.canvasHTML, 'keydown')
   .pipe(
     map((ev: KeyboardEvent) => ev),
   )

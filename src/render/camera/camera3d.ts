@@ -1,7 +1,7 @@
 import * as glm from 'glm-js'
 
 import { Camera } from './camera';
-import { Keys } from '../../consts/keys'
+import { StateKeys } from '../../classes/StateKeys';
 
 export class Camera3D extends Camera {
 
@@ -9,8 +9,13 @@ export class Camera3D extends Camera {
     private _yaw: number = 0;
     private _mousePosX: number = 0;
     private _mousePosY: number = 0;
+    private StateKey: StateKeys = new StateKeys();
 
     update(): void {
+        if (this.StateKey.keyW) this.moveForward(this.cameraSpeed);
+        if (this.StateKey.keyA) this.moveLeft(this.cameraSpeed);
+        if (this.StateKey.keyS) this.moveBack(this.cameraSpeed);
+        if (this.StateKey.keyD) this.moveRight(this.cameraSpeed); 
         if (this.updateFlag) this.updateView();
     }
 
@@ -19,11 +24,9 @@ export class Camera3D extends Camera {
     }
 
     updateKeyboard(ev: KeyboardEvent): void {
-        switch (ev.keyCode) {
-            case Keys.W: this.moveForward(this.cameraSpeed); break;
-            case Keys.A: this.moveLeft(this.cameraSpeed); break;
-            case Keys.S: this.moveBack(this.cameraSpeed); break;
-            case Keys.D: this.moveRight(this.cameraSpeed); break;
+        switch (ev.type) {
+            case 'keydown': this.StateKey.setKey(ev.keyCode, true); break;
+            case 'keyup': this.StateKey.setKey(ev.keyCode, false); break;
         }
     }
 

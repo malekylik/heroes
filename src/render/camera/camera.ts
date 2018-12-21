@@ -113,7 +113,7 @@ export abstract class Camera implements Updateable {
         cameraUp: glm.vec3 = glm.vec3(0, 1, 0),
         cameraFront: glm.vec3 = glm.vec3(0, 0, -3),
         cameraSpeed: number = 2,
-        mouseSpeed: number = 5
+        mouseSpeed: number = 0.5
     ) {
         this._cameraPos = cameraPos;
         this._cameraUp = cameraUp;
