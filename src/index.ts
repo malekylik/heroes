@@ -24,7 +24,6 @@ const TRANSLATE: string = 'translate';
 const ROTATION: string = 'rotation';
 const VIEW: string = 'view';
 
-const camera: Camera = new Camera3D();
 let rotation: glm.mat4 = glm.toMat4(glm.angleAxis(glm.radians(45), glm.vec3(0, 1, 1)));
 let verticesCoord: Float32Array;
 let obj: OBJ.Mesh;
@@ -122,16 +121,19 @@ async function start(): Promise<void> {
 }
 
 document.body.appendChild(canvas.canvasHTML);
+canvas.setColor(bgColor);
+canvas.enableDepthTest();
+canvas.setSize(width, height);
+canvas.canvasHTML.setAttribute('tabindex', '0');
+canvas.canvasHTML.setAttribute('id', 'mainCanvas');
+
+const camera: Camera = new Camera3D();
 
 gl.uniformMatrix4fv(perspectiveUniformLocation, false, perspective.elements);
 gl.uniformMatrix4fv(translateUniformLocation, false, translate.elements);
 gl.uniformMatrix4fv(rotationUniformLocation, false, rotation.elements);
 gl.uniformMatrix4fv(viewUniformLocation, false, camera.view.elements);
 
-canvas.setColor(bgColor);
-canvas.enableDepthTest();
-canvas.setSize(width, height);
-canvas.canvasHTML.setAttribute('tabindex', '0');
 
 const keyboardEventSubscription: Subscription = fromEvent(canvas.canvasHTML, 'keyup')
   .pipe(

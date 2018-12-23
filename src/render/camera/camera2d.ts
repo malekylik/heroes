@@ -39,9 +39,11 @@ export class Camera2D extends Camera {
     }
 
     moveMouse(x: number, y: number): void {
-        this.mousePosX = x;
-        this.mousePosY = y;
-        super.moveMouse(x, y);
+        if (this.StateKey.focus) {
+            this.mousePosX = x;
+            this.mousePosY = y;
+            super.moveMouse(x, y);
+        }
     }
 
     constructor() {
@@ -51,6 +53,8 @@ export class Camera2D extends Camera {
             2,
             10);
 
+        document.getElementById('mainCanvas').onfocus = () => { this.StateKey.setFocus(true); }
+        document.getElementById('mainCanvas').onblur = () => { this.StateKey.setFocus(false); }
     }
 
 }

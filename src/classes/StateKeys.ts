@@ -5,6 +5,7 @@ export class StateKeys {
     keyA: boolean = false;
     keyS: boolean = false;
     keyD: boolean = false;
+    focus: boolean = false;
 
     setKey(keyCode: number, state: boolean): void {
         switch (keyCode) {
@@ -14,4 +15,9 @@ export class StateKeys {
             case Keys.D: this.keyD = state; break;
         }
     }
+
+    setFocus(state: boolean): void {
+        this.focus = state;
+    }
+
 }

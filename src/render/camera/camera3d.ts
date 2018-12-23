@@ -15,12 +15,13 @@ export class Camera3D extends Camera {
         if (this.StateKey.keyW) this.moveForward(this.cameraSpeed);
         if (this.StateKey.keyA) this.moveLeft(this.cameraSpeed);
         if (this.StateKey.keyS) this.moveBack(this.cameraSpeed);
-        if (this.StateKey.keyD) this.moveRight(this.cameraSpeed); 
+        if (this.StateKey.keyD) this.moveRight(this.cameraSpeed);
         if (this.updateFlag) this.updateView();
     }
 
     updateMouse(ev: MouseEvent): void {
-        this.moveMouse(ev.clientX, ev.clientY);
+        if (this.StateKey.focus)
+            this.moveMouse(ev.clientX, ev.clientY);
     }
 
     updateKeyboard(ev: KeyboardEvent): void {
@@ -31,6 +32,7 @@ export class Camera3D extends Camera {
     }
 
     moveMouse(x: number, y: number): void {
+
         const xOffset: number = (x - this._mousePosX) * this.mouseSpeed;
         const yOffset: number = (y - this._mousePosY) * this.mouseSpeed;
 
@@ -53,6 +55,9 @@ export class Camera3D extends Camera {
 
     constructor() {
         super();
+
+        document.getElementById('mainCanvas').onfocus = () => { this.StateKey.setFocus(true); }
+        document.getElementById('mainCanvas').onblur = () => { this.StateKey.setFocus(false); }
     }
 
 }
