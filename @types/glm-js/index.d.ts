@@ -195,4 +195,7 @@ declare module 'glm-js' {
 
     export function toMat4(q: quat): mat4;
 
+    export function dot(v1: vec2, v2: vec2): number; 
+    export function dot(v1: vec3, v2: vec3): number; 
+    export function dot(v1: vec4, v2: vec4): number; 
 }
