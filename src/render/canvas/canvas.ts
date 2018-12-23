@@ -53,6 +53,7 @@ export class Canvas {
   private constructor(canvasHTML: HTMLCanvasElement) {
     this._canvasHTML = canvasHTML;
     this._gl = canvasHTML.getContext('webgl');
+    this._gl.getExtension('OES_element_index_uint');
   }
 
 }

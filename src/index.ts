@@ -16,7 +16,7 @@ const height: number = window.innerHeight;
 const bgColor: glm.vec4 = glm.vec4(0.0, 0.5, 0.0, 1.0);
 const perspective: glm.mat4 = glm.perspective(glm.radians(90), width / height, 1, 1000);
 const translate: glm.mat4 = glm.translate(glm.vec3(0, 0, 0));
-const path: string = './src/groza_obj.obj';
+const path: string = './src/IronMan.obj';
 
 const A_POSITION: string = 'a_Position';
 const PERSPECTIVE: string = 'perspective';
@@ -90,7 +90,8 @@ function render(time: number): void {
   gl.uniformMatrix4fv(viewUniformLocation, false, camera.view.elements);
 
   canvas.clear();
-  gl.drawElements(gl.TRIANGLES, obj.indices.length, gl.UNSIGNED_SHORT, 0);
+  
+  gl.drawElements(gl.TRIANGLES, obj.indices.length, gl.UNSIGNED_INT, 0);
 }
 
 function main(time: number) {
@@ -107,13 +108,12 @@ async function start(): Promise<void> {
   const vertexBuffer: WebGLBuffer = gl.createBuffer();
   const indicesBuffer: WebGLBuffer = gl.createBuffer();
 
-
   verticesCoord = new Float32Array(obj.vertices);
 
   gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
   gl.bufferData(gl.ARRAY_BUFFER, verticesCoord, gl.STATIC_DRAW);
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indicesBuffer);
-  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(obj.indices), gl.STATIC_DRAW);
+  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint32Array(obj.indices), gl.STATIC_DRAW);
   gl.vertexAttribPointer(a_Position, 3, gl.FLOAT, false, 0, 0);
   gl.enableVertexAttribArray(a_Position);
 
