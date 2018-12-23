@@ -10,7 +10,7 @@ import { Camera2D } from './render/camera/camera2d';
 import { Camera3D } from './render/camera/camera3d';
 
 const canvas: Canvas = Canvas.getCanvas();
-const gl: WebGLRenderingContext = canvas.gl;
+const gl: WebGL2RenderingContext = canvas.gl;
 const width: number = window.innerWidth;
 const height: number = window.innerHeight;
 const bgColor: glm.vec4 = glm.vec4(0.0, 0.5, 0.0, 1.0);
@@ -90,7 +90,7 @@ function render(time: number): void {
   gl.uniformMatrix4fv(viewUniformLocation, false, camera.view.elements);
 
   canvas.clear();
-  
+
   gl.drawElements(gl.TRIANGLES, obj.indices.length, gl.UNSIGNED_INT, 0);
 }
 
