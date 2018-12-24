@@ -1,13 +1,15 @@
 const path = require('path');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const CleanWebpackPlugin = require('clean-webpack-plugin');
+
 const { CheckerPlugin } = require('awesome-typescript-loader');
-const mode = process.env.NODE_ENV ? process.env.NODE_ENV: 'development';
+
+const mode = process.env.NODE_ENV ? process.env.NODE_ENV : 'development';
 
 module.exports = {
-  mode: mode,
+  mode,
   resolve: {
-    extensions: ['.ts', '.js']
+    extensions: ['.ts', '.js'],
   },
   entry: {
     main: './src/index.ts',
@@ -15,7 +17,7 @@ module.exports = {
   output: {
     filename: '[name].[hash].js',
     chunkFilename: '[name].[hash].js',
-    path: path.resolve(__dirname, 'dist')
+    path: path.resolve(__dirname, 'dist'),
   },
   devtool: 'inline-source-map',
   devServer: {
@@ -23,8 +25,8 @@ module.exports = {
     historyApiFallback: {
       rewrites: [
         { from: '/', to: '/heroes.html' },
-      ]
-    }
+      ],
+    },
   },
   plugins: [
     new HtmlWebpackPlugin({
@@ -37,26 +39,26 @@ module.exports = {
       verbose: false,
       exclude: ['src'],
     }),
-    new CheckerPlugin()
+    new CheckerPlugin(),
   ],
   module: {
     rules: [
       {
         test: /\.ts?$/,
-        loader: 'awesome-typescript-loader'
-      }
-    ]
+        loader: 'awesome-typescript-loader',
+      },
+    ],
   },
   optimization: {
     splitChunks: {
-        cacheGroups: {
-          vendor: {
-                test: /node_modules/,
-                name: "vendor",
-                chunks: "initial",
-                enforce: true
-            }
-        }
-    }
-  }
+      cacheGroups: {
+        vendor: {
+          test: /node_modules/,
+          name: 'vendor',
+          chunks: 'initial',
+          enforce: true,
+        },
+      },
+    },
+  },
 };

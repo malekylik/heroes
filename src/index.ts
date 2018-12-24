@@ -1,39 +1,13 @@
 // import * as glm from 'glm-js';
 // import * as OBJ from 'webgl-obj-loader';
 
-class Vec3 {
-  constructor(public x: number, public y: number, public z: number) { }
-
-  dot(v: Vec3): number {
-    return this.x * v.x + this.y * v.y + this.z * v.z;
-  }
-
-  add(v: Vec3): Vec3 {
-    return new Vec3(this.x + v.x, this.y + v.y, this.z + v.z);
-  }
-
-  sub(v: Vec3): Vec3 {
-    return new Vec3(this.x - v.x, this.y - v.y, this.z - v.z);
-  }
-
-  mul(s: number): Vec3 {
-    return new Vec3(this.x * s, this.y * s, this.z * s);
-  }
-
-  div(s: number): Vec3 {
-    return new Vec3(this.x / s, this.y / s, this.z / s);
-  }
-
-  length(): number {
-    return Math.sqrt(this.x * this.x + this.y * this.y + this.z * this.z);
-  }
-}
+import { vec3 } from './linear-math';
 
 class Sphere {
-  constructor(public center: Vec3, private radius: number, public color: Vec3) { }
+  constructor(public center: vec3, private radius: number, public color: vec3) { }
 
-  intersectRay(cameraPos: Vec3, pixelPos: Vec3): { t1: number, t2: number } {
-    const oc: Vec3 = cameraPos.sub(this.center);
+  intersectRay(cameraPos: vec3, pixelPos: vec3): { t1: number, t2: number } {
+    const oc: vec3 = cameraPos.sub(this.center);
 
     const k1: number = pixelPos.dot(pixelPos);
     const k2: number = oc.dot(pixelPos) * 2;
@@ -58,23 +32,23 @@ class Sphere {
 abstract class Light {
   constructor(public intensity: number) { }
 
-  abstract computeLight(position: Vec3, normal: Vec3): number;
+  abstract computeLight(position: vec3, normal: vec3): number;
 }
 
  class AmbientLight extends Light {
-  computeLight(_: Vec3, __: Vec3): number {
+  computeLight(_: vec3, __: vec3): number {
     return this.intensity;
   }
 }
 
 class PointLight extends Light {
-  constructor(intensity: number, public position: Vec3) {
+  constructor(intensity: number, public position: vec3) {
     super(intensity);
   }
   
   
-  computeLight(position: Vec3, normal: Vec3): number {
-    const L: Vec3 = this.position.sub(position);
+  computeLight(position: vec3, normal: vec3): number {
+    const L: vec3 = this.position.sub(position);
     const nDotL = normal.dot(L);
     let i: number = 0;
 
@@ -87,12 +61,12 @@ class PointLight extends Light {
 }
 
 class DirectionalLight extends Light {
-  constructor(intensity: number, public direction: Vec3) {
+  constructor(intensity: number, public direction: vec3) {
     super(intensity);
   }
 
-  computeLight(_: Vec3, normal: Vec3): number {
-    const L: Vec3 = this.direction;
+  computeLight(_: vec3, normal: vec3): number {
+    const L: vec3 = this.direction;
     const nDotL = normal.dot(L);
     let i: number = 0;
 
@@ -104,7 +78,7 @@ class DirectionalLight extends Light {
   }
 }
 
-function putPixel(canvas: HTMLCanvasElement, canvasBuffer: ImageData, canvasPitch: number, x: number, y: number, color: Vec3): void {
+function putPixel(canvas: HTMLCanvasElement, canvasBuffer: ImageData, canvasPitch: number, x: number, y: number, color: vec3): void {
   x = canvas.width / 2 + x;
   y = canvas.height / 2 - y - 1;
 
@@ -119,15 +93,15 @@ function putPixel(canvas: HTMLCanvasElement, canvasBuffer: ImageData, canvasPitc
   canvasBuffer.data[offset++] = 255;
 }
 
-function canvasToViewport(x: number, y: number, vw: number, vh: number, cw: number, ch: number, d: number): Vec3 {
-  return new Vec3(x * vw / cw, y * vh / ch, d);
+function canvasToViewport(x: number, y: number, vw: number, vh: number, cw: number, ch: number, d: number): vec3 {
+  return vec3(x * vw / cw, y * vh / ch, d);
 }
 
-function clamp(v: Vec3): Vec3 {
-  return new Vec3(Math.min(255, Math.max(0, v.x)), Math.min(255, Math.max(0, v.y)), Math.min(255, Math.max(0, v.z)));
+function clamp(v: vec3): vec3 {
+  return vec3(Math.min(255, Math.max(0, v.x)), Math.min(255, Math.max(0, v.y)), Math.min(255, Math.max(0, v.z)));
 }
 
-function traceRay(cameraPos: Vec3, pixelPos: Vec3, scene: Array<Sphere>, ligths: Array<Light>, tMin: number, tMax: number): Vec3 {
+function traceRay(cameraPos: vec3, pixelPos: vec3, scene: Array<Sphere>, ligths: Array<Light>, tMin: number, tMax: number): vec3 {
   let closestSphere: Sphere = null;
   let closestT: number = Number.MAX_SAFE_INTEGER;
 
@@ -146,11 +120,11 @@ function traceRay(cameraPos: Vec3, pixelPos: Vec3, scene: Array<Sphere>, ligths:
   }
 
   if (closestSphere === null) {
-    return new Vec3(0, 0, 0);
+    return vec3(0, 0, 0);
   }
 
-  const P: Vec3 = cameraPos.add(pixelPos.mul(closestT));
-  let N: Vec3 = P.sub(closestSphere.center);
+  const P: vec3 = cameraPos.add(pixelPos.mul(closestT));
+  let N: vec3 = P.sub(closestSphere.center);
   N = N.mul(1 / N.length());
   let i: number = 0;
 
@@ -164,7 +138,7 @@ function traceRay(cameraPos: Vec3, pixelPos: Vec3, scene: Array<Sphere>, ligths:
 const canvasHTML: HTMLCanvasElement = document.getElementById('canvas') as HTMLCanvasElement;
 const ctx: CanvasRenderingContext2D = canvasHTML.getContext('2d');
 
-const cameraPosition = new Vec3(0, 0, 0);
+const cameraPosition = vec3(0, 0, 0);
 
 const Cw: number = canvasHTML.width;
 const Ch: number = canvasHTML.height;
@@ -177,24 +151,24 @@ const canvasBuffer: ImageData = ctx.getImageData(0, 0, Cw, Ch);
 const canvasPitch = canvasBuffer.width * 4;
 
 const scene: Array<Sphere> = [
-  new Sphere(new Vec3(0, -1, 3), 1, new Vec3(255, 0, 0)),
-  new Sphere(new Vec3(2, 0, 4), 1, new Vec3(0, 0, 255)),
-  new Sphere(new Vec3(-2, 0, 4), 1, new Vec3(0, 255, 0)),
-  new Sphere(new Vec3(0, -5001, 0), 5000, new Vec3(255, 255, 0)),
+  new Sphere(vec3(0, -1, 3), 1, vec3(255, 0, 0)),
+  new Sphere(vec3(2, 0, 4), 1, vec3(0, 0, 255)),
+  new Sphere(vec3(-2, 0, 4), 1, vec3(0, 255, 0)),
+  new Sphere(vec3(0, -5001, 0), 5000, vec3(255, 255, 0)),
 ];
 
 const sceneLight: Array<Light> = [
   new AmbientLight(0.2),
-  new PointLight(0.6, new Vec3(2, 1, 0)),
-  new DirectionalLight(0.2, new Vec3(1, 4, 4)),
+  new PointLight(0.6, vec3(2, 1, 0)),
+  new DirectionalLight(0.2, vec3(1, 4, 4)),
 ];
 
 const now = Date.now();
 
 for (let x = Math.floor(-Cw / 2); x < Math.floor(Cw / 2); x++) {
   for (let y = Math.floor(-Ch / 2); y < Math.floor(Ch / 2); y++) {
-    const D: Vec3 = canvasToViewport(x, y, Vw, Vh, Cw, Ch, d);
-    const color: Vec3 = clamp(traceRay(cameraPosition, D, scene, sceneLight, 1, Infinity));
+    const D: vec3 = canvasToViewport(x, y, Vw, Vh, Cw, Ch, d);
+    const color: vec3 = clamp(traceRay(cameraPosition, D, scene, sceneLight, 1, Infinity));
 
     putPixel(canvasHTML, canvasBuffer, canvasPitch, x, y, color);
   }
