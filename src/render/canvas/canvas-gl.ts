@@ -1,5 +1,4 @@
-import * as glm from 'glm-js'
-
+import { vec4 } from '../../linear-math';
 import { Canvas } from './canvas';
 
 export class CanvasGl extends Canvas {
@@ -19,7 +18,7 @@ export class CanvasGl extends Canvas {
         this._gl.enable(this._gl.DEPTH_TEST);
     }
 
-    set bgColor(rgba: glm.vec4) {
+    set bgColor(rgba: vec4) {
         super.bgColor = rgba;
         this._gl.clearColor(rgba.r, rgba.g, rgba.b, rgba.a);
     }

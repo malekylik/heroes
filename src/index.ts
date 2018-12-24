@@ -1,4 +1,3 @@
-import * as glm from 'glm-js';
 // import * as OBJ from 'webgl-obj-loader';
 
 import { vec3 } from './linear-math';
@@ -141,9 +140,7 @@ const canvas: Canvas2D = Canvas2D.getCanvas();
 document.body.appendChild(canvas.canvasHTML);
 
 canvas.setSize(400, 400);
-canvas.bgColor = glm.vec4(100, 50, 20, 1);
-canvas.clear();
-canvas.render();
+
 
 // const canvasHTML: HTMLCanvasElement = document.getElementById('canvas') as HTMLCanvasElement;
 // const ctx: CanvasRenderingContext2D = canvasHTML.getContext('2d');

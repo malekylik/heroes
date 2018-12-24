@@ -1,4 +1,4 @@
-class Vec3 {
+export class Vec3 {
     private _x: number;
     private _y: number;
     private _z: number;

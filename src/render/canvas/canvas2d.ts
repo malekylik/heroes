@@ -1,6 +1,5 @@
 import { Canvas } from './canvas';
-import { vec3 } from '../../linear-math';
-import * as glm from 'glm-js'
+import { vec4 } from '../../linear-math';
 
 export class Canvas2D extends Canvas {
     private readonly ctx: CanvasRenderingContext2D;
@@ -21,7 +20,7 @@ export class Canvas2D extends Canvas {
         }
     }
 
-    putPixel(x: number, y: number, color: glm.vec4): void {
+    putPixel(x: number, y: number, color: vec4): void {
         if (x < 0 || x >= this.canvasHTML.width || y < 0 || y >= this.canvasHTML.height) {
             throw new Error('out of range');
           }
