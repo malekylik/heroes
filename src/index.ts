@@ -5,28 +5,15 @@ import { Canvas2D } from './render/canvas/canvas2d';
 import { Sphere } from './render/models/sphere';
 import { Material } from './render/material/material';
 import { Light, AmbientLight, PointLight, DirectionalLight } from './render/light';
+import { closestIntersection } from './utils/graphic';
 
 function canvasToViewport(x: number, y: number, vw: number, vh: number, cw: number, ch: number, d: number): vec3 {
   return vec3(x * vw / cw, y * vh / ch, d);
 }
 
-function traceRay(cameraPos: vec3, rayDirection: vec3, scene: Array<Sphere>, ligths: Array<Light>, tMin: number, tMax: number): vec3 {
-  let closestSphere: Sphere = null;
-  let closestT: number = Number.MAX_SAFE_INTEGER;
+function traceRay(cameraPos: vec3, rayDirection: vec3, scene: Array<Sphere>, lights: Array<Light>, tMin: number, tMax: number): vec3 {
 
-  for (let sphere of scene) {
-    const { t1, t2 }: { t1: number, t2: number } = sphere.intersectRay(cameraPos, rayDirection);
-
-    if ((t1 >= tMin && t1 <= tMax) && t1 < closestT) {
-      closestT = t1;
-      closestSphere = sphere;
-    }
-
-    if ((t2 >= tMin && t2 <= tMax) && t2 < closestT) {
-      closestT = t2;
-      closestSphere = sphere;
-    }
-  }
+  const { closestSphere, closestT } = closestIntersection(cameraPos, rayDirection, scene, tMin, tMax);
 
   if (closestSphere === null) {
     return vec3(255, 255, 255);
@@ -39,8 +26,18 @@ function traceRay(cameraPos: vec3, rayDirection: vec3, scene: Array<Sphere>, lig
   let color: vec3 = vec3(0, 0, 0);
   const minusRayDirection: vec3 = rayDirection.mul(-1);
 
-  for (let ligth of ligths) {
-    color = color.add(ligth.computeLight(P, N, minusRayDirection, closestSphere.material));
+  for (let light of lights) {
+    const L: vec3 | null = light.getDirection(P);
+
+    if (L) {
+      const { closestSphere: shadowSphere } = closestIntersection(P, L, scene, 0.001, tMax);
+
+      if (shadowSphere) {
+        continue;
+      }
+    }
+
+    color = color.add(light.computeLight(P, N, minusRayDirection, closestSphere.material));
   }
 
   return color;

@@ -12,4 +12,8 @@ export class PointLight extends Light {
 
         return material.diffuse.mul(this.computeIntensity(lightDirection, normal, rayDirection, material));
     }
+
+    getDirection(p: vec3): null | vec3 {
+        return this.position.sub(p);
+    }
 }

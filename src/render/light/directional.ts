@@ -1,6 +1,6 @@
-import { Light } from "./light";
-import { vec3 } from "../../linear-math";
-import { Material } from "../material/material";
+import { Light } from './light';
+import { vec3 } from '../../linear-math';
+import { Material } from '../material/material';
 
 export class DirectionalLight extends Light {
     constructor(intensity: vec3, public direction: vec3) {
@@ -11,5 +11,9 @@ export class DirectionalLight extends Light {
         const lightDirection: vec3 = this.direction;
 
         return material.diffuse.mul(this.computeIntensity(lightDirection, normal, rayDirection, material));
+    }
+
+    getDirection(): null | vec3 {
+        return this.direction;
     }
 }
