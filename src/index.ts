@@ -2,95 +2,59 @@
 
 import { vec3 } from './linear-math';
 import { Canvas2D } from './render/canvas/canvas2d';
-
-class Sphere {
-  constructor(public center: vec3, private radius: number, public color: vec3) { }
-
-  intersectRay(cameraPos: vec3, pixelPos: vec3): { t1: number, t2: number } {
-    const oc: vec3 = cameraPos.sub(this.center);
-
-    const k1: number = pixelPos.dot(pixelPos);
-    const k2: number = oc.dot(pixelPos) * 2;
-    const k3: number = oc.dot(oc) - this.radius * this.radius;
-
-    const discriminant: number = k2 * k2 - 4 * k1 * k3;
-
-    if (discriminant < 0) {
-      return {
-        t1: Number.MAX_SAFE_INTEGER,
-        t2: Number.MAX_SAFE_INTEGER,
-      };
-    }
-
-    return {
-      t1: (-k2 + Math.sqrt(discriminant)) / (2 * k1),
-      t2: (-k2 - Math.sqrt(discriminant)) / (2 * k1),
-    };
-  }
-}
+import { Sphere } from './render/models/sphere';
+import { Material } from './render/material/material';
 
 abstract class Light {
-  constructor(public intensity: number) { }
+  constructor(public intensity: vec3) { }
 
-  abstract computeLight(position: vec3, normal: vec3): number;
+  abstract computeLight(position: vec3, normal: vec3, material: Material): vec3;
 }
 
  class AmbientLight extends Light {
-  computeLight(_: vec3, __: vec3): number {
-    return this.intensity;
+  computeLight(_: vec3, __: vec3, material: Material): vec3 {
+    return material.ambient.mul(this.intensity);
   }
 }
 
 class PointLight extends Light {
-  constructor(intensity: number, public position: vec3) {
+  constructor(intensity: vec3, public position: vec3) {
     super(intensity);
   }
   
-  
-  computeLight(position: vec3, normal: vec3): number {
+  computeLight(position: vec3, normal: vec3, material: Material): vec3 {
     const L: vec3 = this.position.sub(position);
     const nDotL = normal.dot(L);
-    let i: number = 0;
+    let i: vec3 = vec3(0, 0, 0);
 
     if (nDotL > 0) {
-      i += this.intensity * nDotL / (normal.length() * L.length());
+      i = this.intensity.mul(nDotL / (normal.length() * L.length()));
+    } else {
+      i = vec3(0, 0, 0);
     }
 
-    return i;
+    return material.diffuse.mul(i);
   }
 }
 
 class DirectionalLight extends Light {
-  constructor(intensity: number, public direction: vec3) {
+  constructor(intensity: vec3, public direction: vec3) {
     super(intensity);
   }
 
-  computeLight(_: vec3, normal: vec3): number {
+  computeLight(_: vec3, normal: vec3, material: Material): vec3 {
     const L: vec3 = this.direction;
     const nDotL = normal.dot(L);
-    let i: number = 0;
+    let i: vec3;
 
     if (nDotL > 0) {
-      i += this.intensity * nDotL / (normal.length() * L.length());
+      i = this.intensity.mul(nDotL / (normal.length() * L.length()));
+    } else {
+      i = vec3(0, 0, 0);
     }
 
-    return i;
+    return material.diffuse.mul(i);
   }
-}
-
-function putPixel(canvas: HTMLCanvasElement, canvasBuffer: ImageData, canvasPitch: number, x: number, y: number, color: vec3): void {
-  x = canvas.width / 2 + x;
-  y = canvas.height / 2 - y - 1;
-
-  if (x < 0 || x >= canvas.width || y < 0 || y >= canvas.height) {
-    return;
-  }
-
-  let offset = 4 * x + canvasPitch * y;
-  canvasBuffer.data[offset++] = color.x;
-  canvasBuffer.data[offset++] = color.y;
-  canvasBuffer.data[offset++] = color.z;
-  canvasBuffer.data[offset++] = 255;
 }
 
 function canvasToViewport(x: number, y: number, vw: number, vh: number, cw: number, ch: number, d: number): vec3 {
@@ -126,13 +90,14 @@ function traceRay(cameraPos: vec3, pixelPos: vec3, scene: Array<Sphere>, ligths:
   const P: vec3 = cameraPos.add(pixelPos.mul(closestT));
   let N: vec3 = P.sub(closestSphere.center);
   N = N.mul(1 / N.length());
-  let i: number = 0;
+
+  let color: vec3 = vec3(0, 0, 0);
 
   for (let ligth of ligths) {
-    i += ligth.computeLight(P, N);
+    color = color.add(ligth.computeLight(P, N, closestSphere.material));
   }
 
-  return closestSphere.color.mul(i);
+  return color;
 }
 
 const canvas: Canvas2D = Canvas2D.getCanvas();
@@ -141,49 +106,45 @@ document.body.appendChild(canvas.canvasHTML);
 
 canvas.setSize(400, 400);
 
+const cameraPosition = vec3(0, 0, 0);
 
-// const canvasHTML: HTMLCanvasElement = document.getElementById('canvas') as HTMLCanvasElement;
-// const ctx: CanvasRenderingContext2D = canvasHTML.getContext('2d');
+const Cw: number = canvas.canvasHTML.width;
+const Ch: number = canvas.canvasHTML.height;
 
-// const cameraPosition = vec3(0, 0, 0);
+const halfCw: number = Math.floor(Cw / 2);
+const halfCh: number = Math.floor(Ch / 2);
 
-// const Cw: number = canvasHTML.width;
-// const Ch: number = canvasHTML.height;
+const Vw: number = 1;
+const Vh: number = 1;
+const d: number = 1;
 
-// const Vw: number = 1;
-// const Vh: number = 1;
-// const d: number = 1;
+const scene: Array<Sphere> = [
+  new Sphere(vec3(0, -1, 3), 1, new Material(vec3(255, 0, 0), vec3(120, 50, 0), 500)),
+  new Sphere(vec3(2, 0, 4), 1, new Material(vec3(0, 0, 255), vec3(0, 0, 255), 500)),
+  new Sphere(vec3(-2, 0, 4), 1, new Material(vec3(0, 255, 0), vec3(0, 255, 0), 10)),
+  new Sphere(vec3(0, -5001, 0), 5000, new Material(vec3(255, 255, 0), vec3(255, 255, 0), 1000)),
+];
 
-// const canvasBuffer: ImageData = ctx.getImageData(0, 0, Cw, Ch);
-// const canvasPitch = canvasBuffer.width * 4;
+const sceneLight: Array<Light> = [
+  new AmbientLight(vec3(0.2, 0.2, 0.2)),
+  new PointLight(vec3(0.6, 0.6, 0.6), vec3(2, 1, 0)),
+  new DirectionalLight(vec3(0.2, 0.2, 0.2), vec3(1, 4, 4)),
+];
 
-// const scene: Array<Sphere> = [
-//   new Sphere(vec3(0, -1, 3), 1, vec3(255, 0, 0)),
-//   new Sphere(vec3(2, 0, 4), 1, vec3(0, 0, 255)),
-//   new Sphere(vec3(-2, 0, 4), 1, vec3(0, 255, 0)),
-//   new Sphere(vec3(0, -5001, 0), 5000, vec3(255, 255, 0)),
-// ];
+const now = Date.now();
 
-// const sceneLight: Array<Light> = [
-//   new AmbientLight(0.2),
-//   new PointLight(0.6, vec3(2, 1, 0)),
-//   new DirectionalLight(0.2, vec3(1, 4, 4)),
-// ];
+for (let x = -halfCw; x < halfCw; x++) {
+  for (let y = -halfCh; y < halfCh; y++) {
+    const direction: vec3 = canvasToViewport(x,y, Vw, Vh, Cw, Ch, d);
+    const color: vec3 = clamp(traceRay(cameraPosition, direction, scene, sceneLight, 1, Infinity));
 
-// const now = Date.now();
+    canvas.putPixel(halfCw + x,halfCh - y - 1, color);
+  }
+}
 
-// for (let x = Math.floor(-Cw / 2); x < Math.floor(Cw / 2); x++) {
-//   for (let y = Math.floor(-Ch / 2); y < Math.floor(Ch / 2); y++) {
-//     const D: vec3 = canvasToViewport(x, y, Vw, Vh, Cw, Ch, d);
-//     const color: vec3 = clamp(traceRay(cameraPosition, D, scene, sceneLight, 1, Infinity));
+canvas.render();
 
-//     putPixel(canvasHTML, canvasBuffer, canvasPitch, x, y, color);
-//   }
-// }
-
-// ctx.putImageData(canvasBuffer, 0, 0);
-
-// console.log(`time: ${Date.now() - now}`);
+console.log(`time: ${Date.now() - now}`);
 
 // import { CanvasGl } from './render/canvas/canvas-gl';
 
