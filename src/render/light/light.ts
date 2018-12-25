@@ -1,5 +1,6 @@
 import { vec3 } from '../../linear-math';
 import { Material } from '../material/material';
+import { reflectRay } from '../../utils/graphic';
 
 export abstract class Light {
     constructor(public intensity: vec3) { }
@@ -16,7 +17,7 @@ export abstract class Light {
       }
   
       if (material.specular != -1) {
-        const reflectionDirection = normal.mul(normal.dot(lightDirection)).mul(2).sub(lightDirection);
+        const reflectionDirection = reflectRay(lightDirection, normal);
         const reflectionDDotRayD: number = reflectionDirection.dot(rayDirection);
   
         if (reflectionDDotRayD > 0) {

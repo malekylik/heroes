@@ -24,3 +24,7 @@ export function closestIntersection(cameraPos: vec3, rayDirection: vec3, scene: 
         closestT,
     }
 }
+
+export function reflectRay(v: vec3, normal: vec3): vec3 {
+    return normal.mul(normal.dot(v)).mul(2).sub(v);
+}
