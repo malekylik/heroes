@@ -22,6 +22,7 @@ module.exports = {
   devtool: 'inline-source-map',
   devServer: {
     contentBase: './dist',
+    disableHostCheck: true,
     historyApiFallback: {
       rewrites: [
         { from: '/', to: '/heroes.html' },
