@@ -1,7 +1,7 @@
 import * as glm from 'glm-js'
 
 import { Camera } from './camera';
-import { StateKeys } from '../../classes/StateKeys';
+import { ACCURACY_ROUND } from '../../consts/consts';
 
 export class Camera3D extends Camera {
 
@@ -9,29 +9,43 @@ export class Camera3D extends Camera {
     private _yaw: number = 0;
     private _mousePosX: number = 0;
     private _mousePosY: number = 0;
-    private StateKey: StateKeys = new StateKeys();
 
     update(): void {
-        if (this.StateKey.keyW) this.moveForward(this.cameraSpeed);
-        if (this.StateKey.keyA) this.moveLeft(this.cameraSpeed);
-        if (this.StateKey.keyS) this.moveBack(this.cameraSpeed);
-        if (this.StateKey.keyD) this.moveRight(this.cameraSpeed);
+        if (this.stateKey.keyW) this.moveForward(this.cameraSpeed);
+        if (this.stateKey.keyA) this.moveLeft(this.cameraSpeed);
+        if (this.stateKey.keyS) this.moveBack(this.cameraSpeed);
+        if (this.stateKey.keyD) this.moveRight(this.cameraSpeed);
         if (this.updateFlag) this.updateView();
     }
 
     updateMouse(ev: MouseEvent): void {
-        if (this.StateKey.focus)
+        if (this.stateKey.focus)
             this.moveMouse(ev.clientX, ev.clientY);
     }
 
     updateKeyboard(ev: KeyboardEvent): void {
         switch (ev.type) {
-            case 'keydown': this.StateKey.setKey(ev.keyCode, true); break;
-            case 'keyup': this.StateKey.setKey(ev.keyCode, false); break;
+            case 'keydown': this.stateKey.setKey(ev.keyCode, true); break;
+            case 'keyup': this.stateKey.setKey(ev.keyCode, false); break;
         }
     }
 
     moveMouse(x: number, y: number): void {
+        
+        if (this.stateKey.isFirstMouse) {
+            this._mousePosX = x;
+            this._mousePosY = y;
+
+            if (this.stateKey.isFirstFocus) {
+                this._pitch = glm.degrees(Math.round(Math.asin(this.cameraFront.y) * ACCURACY_ROUND) / ACCURACY_ROUND);
+                this._yaw = glm.degrees(Math.asin(this.cameraFront.z / Math.cos(glm.radians(this._pitch))));
+                this.stateKey.isFirstFocus = false;
+            }
+
+            this.stateKey.isFirstMouse = false;
+
+            return;
+        }
 
         const xOffset: number = (x - this._mousePosX) * this.mouseSpeed;
         const yOffset: number = (y - this._mousePosY) * this.mouseSpeed;
@@ -53,11 +67,18 @@ export class Camera3D extends Camera {
         super.moveMouse(x, y);
     }
 
-    constructor() {
-        super();
+    constructor(cameraPos: glm.vec3 = glm.vec3(0, 0, 200),
+        cameraUp: glm.vec3 = glm.vec3(0, 1, 0),
+        cameraFront: glm.vec3 = glm.vec3(0, 0, -1),
+        cameraSpeed: number = 2,
+        mouseSpeed: number = 0.5
+    ) {
+        super(cameraPos,
+            cameraUp,
+            cameraFront,
+            cameraSpeed,
+            mouseSpeed);
 
-        document.getElementById('mainCanvas').onfocus = () => { this.StateKey.setFocus(true); }
-        document.getElementById('mainCanvas').onblur = () => { this.StateKey.setFocus(false); }
     }
 
 }

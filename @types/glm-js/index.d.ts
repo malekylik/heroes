@@ -184,10 +184,11 @@ declare module 'glm-js' {
     /**
      * Converts degrees to radians
      *
-     * @param {number} angle degrees
+     * @param {number} degrees degrees
      * @returns {number} radians
      */
-    export function radians(angle: number): number;
+    export function radians(degrees: number): number;
+    export function degrees(radians: number): number;
 
     export function normalize(vec: vec4): vec4;
     export function normalize(vec: vec3): vec3;

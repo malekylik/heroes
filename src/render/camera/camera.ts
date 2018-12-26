@@ -2,6 +2,8 @@ import * as glm from 'glm-js';
 
 import { Subject } from 'rxjs';
 import { distinctUntilChanged } from 'rxjs/operators';
+import { StateKeys } from '../../classes/stateKeys';
+import { Canvas } from '../canvas/canvas';
 
 export abstract class Camera implements Updateable {
 
@@ -12,6 +14,7 @@ export abstract class Camera implements Updateable {
     private _cameraSpeed: number;
     private _mouseSpeed: number;
     private flagUpdater: Subject<boolean> = new Subject();
+    protected stateKey: StateKeys = new StateKeys();
     protected updateFlag: boolean = false;
 
     get view(): glm.mat4 {
@@ -122,6 +125,22 @@ export abstract class Camera implements Updateable {
         this._mouseSpeed = mouseSpeed;
         this.updateView();
 
+        const canvas: HTMLCanvasElement = Canvas.getCanvas().canvasHTML;
+        
+        canvas.addEventListener('focus', () => { 
+            this.stateKey.setFocus(true); 
+            this.stateKey.isFirstMouse = true;
+        });
+        canvas.addEventListener('blur', () => { 
+            this.stateKey.setFocus(false); 
+            this.stateKey.isFirstMouse = true;
+        });
+        canvas.addEventListener('mouseleave', () => { 
+            this.stateKey.isFirstMouse = true;
+        });
+
+        //right click missed
+        
         this.flagUpdater
             .pipe(distinctUntilChanged())
             .subscribe((flag: boolean) => this.updateFlag = flag);

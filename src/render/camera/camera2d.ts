@@ -1,7 +1,6 @@
 import * as glm from 'glm-js';
 
 import { Camera } from './camera';
-import { StateKeys } from '../../classes/StateKeys';
 
 export class Camera2D extends Camera {
 
@@ -11,18 +10,12 @@ export class Camera2D extends Camera {
     private marginBot: number = 5;
     private marginRight: number = 5;
     private marginLeft: number = 5;
-    private StateKey: StateKeys = new StateKeys();
 
     update(): void {
         if (this.mousePosX < this.marginLeft) this.moveLeft(this.mouseSpeed);
         if (this.mousePosX > window.innerWidth - this.marginRight) this.moveRight(this.mouseSpeed);
         if (this.mousePosY < this.marginBot) this.moveUp(this.mouseSpeed);
         if (this.mousePosY > window.innerHeight - this.marginUp) this.moveDown(this.mouseSpeed);
-
-        if (this.StateKey.keyW) this.moveUp(this.cameraSpeed);
-        if (this.StateKey.keyA) this.moveLeft(this.cameraSpeed);
-        if (this.StateKey.keyS) this.moveDown(this.cameraSpeed);
-        if (this.StateKey.keyD) this.moveRight(this.cameraSpeed);
 
         if (this.updateFlag) this.updateView();
     }
@@ -32,29 +25,29 @@ export class Camera2D extends Camera {
     }
 
     updateKeyboard(ev: KeyboardEvent): void {
-        switch (ev.type) {
-            case 'keydown': this.StateKey.setKey(ev.keyCode, true); break;
-            case 'keyup': this.StateKey.setKey(ev.keyCode, false); break;
-        }
+
     }
 
     moveMouse(x: number, y: number): void {
-        if (this.StateKey.focus) {
+        if (this.stateKey.focus) {
             this.mousePosX = x;
             this.mousePosY = y;
             super.moveMouse(x, y);
         }
     }
 
-    constructor() {
-        super(glm.vec3(0, 0, 200),
-            glm.vec3(0, 1, 0),
-            glm.vec3(0, 0, -3),
-            2,
-            10);
+    constructor(cameraPos: glm.vec3 = glm.vec3(0, 0, 200),
+        cameraUp: glm.vec3 = glm.vec3(0, 1, 0),
+        cameraFront: glm.vec3 = glm.vec3(0, 0, -3),
+        cameraSpeed: number = 2,
+        mouseSpeed: number = 10
+    ) {
+        super(cameraPos,
+            cameraUp,
+            cameraFront,
+            cameraSpeed,
+            mouseSpeed);
 
-        document.getElementById('mainCanvas').onfocus = () => { this.StateKey.setFocus(true); }
-        document.getElementById('mainCanvas').onblur = () => { this.StateKey.setFocus(false); }
     }
 
 }
