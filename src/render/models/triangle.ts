@@ -5,24 +5,26 @@ import { Material } from '../material/material';
 export class Triangle extends Model {
 
     public normal: vec3;
-    private p1: vec3;
-    private p2: vec3;
+    private edge0: vec3;
+    private edge1: vec3;
+    private edge2: vec3;
 
     constructor(public a: vec3, public b: vec3, public c: vec3, material: Material) {
         super(material);
+        
+        const edge0: vec3 = this.b.sub(this.a);
+        const edge1: vec3 = this.c.sub(this.b);
+        const edge2: vec3 = this.a.sub(this.c);
 
-        const ab: vec3 = a.sub(b);
-        const ac: vec3 = a.sub(c);
-
-        this.p1 = ab;
-        this.p2 = ac;
-
-        this.normal = ab.cross(ac);
+        this.normal = edge0.cross(edge1);
+        this.edge0 = edge0;
+        this.edge1 = edge1;
+        this.edge2 = edge2;
     }
 
     intersectRay(cameraPos: vec3, pixelPos: vec3): { t1: number, t2: number } {
         const normal: vec3 = this.normal;
-        const op: vec3 = cameraPos.sub(this.p1);
+        const op: vec3 = cameraPos.sub(this.a);
         const dDotN: number = pixelPos.dot(normal);
 
         if (dDotN === 0) {
@@ -33,17 +35,18 @@ export class Triangle extends Model {
         }
 
         const t: number = -((normal.dot(op)) / dDotN);
+
         const P: vec3 = cameraPos.add(pixelPos.mul(t));
 
-        const S: number = 0.5 * this.p1.cross(this.p2).length();
-        const S1: number = 0.5 * this.b.sub(P).cross(this.c.sub(P)).length();
-        const S2: number = 0.5 * P.sub(this.c).cross(P.sub(this.a)).length();
+        const C0: vec3 = P.sub(this.a); 
+        const C1: vec3 = P.sub(this.b); 
+        const C2: vec3 = P.sub(this.c); 
 
-        const w1: number = S1 / S;
-        const w2: number = S2 / S;
-        const w3: number = 1 - w1 - w2;
-
-        if (0 <= w1 + w2 + w3 && w1 + w2 + w3 <= 1) {
+        if (
+            normal.dot(this.edge0.cross(C0)) > 0 &&
+            normal.dot(this.edge1.cross(C1)) > 0 &&
+            normal.dot(this.edge2.cross(C2)) > 0
+        ) {
             return {
                 t1: t,
                 t2: t,

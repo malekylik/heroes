@@ -54,7 +54,7 @@ document.body.appendChild(canvas.canvasHTML);
 
 canvas.setSize(400, 400);
 
-const cameraPosition = vec3(0, 0, 0);
+const cameraPosition = vec3(0, 1, -5);
 
 const Cw: number = canvas.canvasHTML.width;
 const Ch: number = canvas.canvasHTML.height;
@@ -67,11 +67,11 @@ const Vh: number = 1;
 const d: number = 1;
 
 const scene: Array<Model> = [
-  new Triangle(vec3(-3, 0, 3), vec3(0, 5, 3), vec3(3, 0, 3), new Material(vec3(255, 0, 0), vec3(255, 0, 0), 500, 0.2)),
-  // new Sphere(vec3(0, -1, 3), 1, new Material(vec3(255, 0, 0), vec3(255, 0, 0), 500, 0.2)),
-  // new Sphere(vec3(2, 0, 4), 1, new Material(vec3(0, 0, 255), vec3(0, 0, 255), 500, 0.3)),
-  // new Sphere(vec3(-2, 0, 4), 1, new Material(vec3(0, 255, 0), vec3(0, 255, 0), 10, 0.4)),
-  // new Sphere(vec3(0, -5001, 0), 5000, new Material(vec3(255, 255, 0), vec3(255, 255, 0), 1000, 0.5)),
+  new Triangle(vec3(1, 2, 3), vec3(0, 5, 3), vec3(3, 2, 3), new Material(vec3(255, 0, 0), vec3(255, 0, 0), 500, 0.2)),
+  new Sphere(vec3(0, -1, 3), 1, new Material(vec3(255, 0, 0), vec3(255, 0, 0), 500, 0.2)),
+  new Sphere(vec3(2, 0, 4), 1, new Material(vec3(0, 0, 255), vec3(0, 0, 255), 500, 0.3)),
+  new Sphere(vec3(-2, 0, 4), 1, new Material(vec3(0, 255, 0), vec3(0, 255, 0), 10, 0.4)),
+  new Sphere(vec3(0, -5001, 0), 5000, new Material(vec3(255, 255, 0), vec3(255, 255, 0), 1000, 0.5)),
 ];
 
 const sceneLight: Array<Light> = [
