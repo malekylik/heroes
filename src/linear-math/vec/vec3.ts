@@ -103,6 +103,10 @@ export class Vec3 {
         }
     }
 
+    cross(v: vec3): vec3 {
+        return new Vec3(this.y * v.z - this.z * v.y, -(this.x * v.z - this.z * v.x), this.x * v.y - this.y * v.x);
+    }
+
     div(s: number): Vec3 {
         return new Vec3(this.x / s, this.y / s, this.z / s);
     }

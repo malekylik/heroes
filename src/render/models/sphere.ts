@@ -1,8 +1,11 @@
 import { vec3 } from '../../linear-math';
 import { Material } from '../material/material';
+import { Model } from './model';
 
-export class Sphere {
-    constructor(public center: vec3, private radius: number, public material: Material) { }
+export class Sphere extends Model {
+    constructor(public center: vec3, private radius: number, material: Material) { 
+        super(material);
+    }
 
     intersectRay(cameraPos: vec3, pixelPos: vec3): { t1: number, t2: number } {
         const oc: vec3 = cameraPos.sub(this.center);
@@ -24,5 +27,10 @@ export class Sphere {
             t1: (-k2 + Math.sqrt(discriminant)) / (2 * k1),
             t2: (-k2 - Math.sqrt(discriminant)) / (2 * k1),
         };
+    }
+
+    getNormal(p: vec3): vec3 {
+        let N: vec3 = p.sub(this.center);
+        return N.mul(1 / N.length());
     }
 }

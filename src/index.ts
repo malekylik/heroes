@@ -4,12 +4,14 @@ import { Sphere } from './render/models/sphere';
 import { Material } from './render/material/material';
 import { Light, AmbientLight, PointLight, DirectionalLight } from './render/light';
 import { closestIntersection, reflectRay } from './utils/graphic';
+import { Model } from './render/models/model';
+import { Triangle } from './render/models/triangle';
 
 function canvasToViewport(x: number, y: number, vw: number, vh: number, cw: number, ch: number, d: number): vec3 {
   return vec3(x * vw / cw, y * vh / ch, d);
 }
 
-function traceRay(cameraPos: vec3, rayDirection: vec3, scene: Array<Sphere>, lights: Array<Light>, tMin: number, tMax: number, reflectionDepth: number): vec3 {
+function traceRay(cameraPos: vec3, rayDirection: vec3, scene: Array<Model>, lights: Array<Light>, tMin: number, tMax: number, reflectionDepth: number): vec3 {
 
   const { closestSphere, closestT } = closestIntersection(cameraPos, rayDirection, scene, tMin, tMax);
 
@@ -18,8 +20,7 @@ function traceRay(cameraPos: vec3, rayDirection: vec3, scene: Array<Sphere>, lig
   }
 
   const P: vec3 = cameraPos.add(rayDirection.mul(closestT));
-  let N: vec3 = P.sub(closestSphere.center);
-  N = N.mul(1 / N.length());
+  let N: vec3 = closestSphere.getNormal(P);
 
   let color: vec3 = vec3(0, 0, 0);
   const minusRayDirection: vec3 = rayDirection.mul(-1);
@@ -65,11 +66,12 @@ const Vw: number = 1;
 const Vh: number = 1;
 const d: number = 1;
 
-const scene: Array<Sphere> = [
-  new Sphere(vec3(0, -1, 3), 1, new Material(vec3(255, 0, 0), vec3(255, 0, 0), 500, 0.2)),
-  new Sphere(vec3(2, 0, 4), 1, new Material(vec3(0, 0, 255), vec3(0, 0, 255), 500, 0.3)),
-  new Sphere(vec3(-2, 0, 4), 1, new Material(vec3(0, 255, 0), vec3(0, 255, 0), 10, 0.4)),
-  new Sphere(vec3(0, -5001, 0), 5000, new Material(vec3(255, 255, 0), vec3(255, 255, 0), 1000, 0.5)),
+const scene: Array<Model> = [
+  new Triangle(vec3(-3, 0, 3), vec3(0, 5, 3), vec3(3, 0, 3), new Material(vec3(255, 0, 0), vec3(255, 0, 0), 500, 0.2)),
+  // new Sphere(vec3(0, -1, 3), 1, new Material(vec3(255, 0, 0), vec3(255, 0, 0), 500, 0.2)),
+  // new Sphere(vec3(2, 0, 4), 1, new Material(vec3(0, 0, 255), vec3(0, 0, 255), 500, 0.3)),
+  // new Sphere(vec3(-2, 0, 4), 1, new Material(vec3(0, 255, 0), vec3(0, 255, 0), 10, 0.4)),
+  // new Sphere(vec3(0, -5001, 0), 5000, new Material(vec3(255, 255, 0), vec3(255, 255, 0), 1000, 0.5)),
 ];
 
 const sceneLight: Array<Light> = [
@@ -83,7 +85,7 @@ const now = Date.now();
 for (let x = -halfCw; x < halfCw; x++) {
   for (let y = -halfCh; y < halfCh; y++) {
     const rayDirection: vec3 = canvasToViewport(x, y, Vw, Vh, Cw, Ch, d);
-    const color: vec3 = traceRay(cameraPosition, rayDirection, scene, sceneLight, 1, Infinity, 2);
+    const color: vec3 = traceRay(cameraPosition, rayDirection, scene, sceneLight, d, Infinity, 2);
 
     canvas.putPixel(halfCw + x, halfCh - y - 1, color);
   }

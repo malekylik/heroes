@@ -1,8 +1,8 @@
 import { vec3 } from '../linear-math';
-import { Sphere } from '../render/models/sphere';
+import { Model } from '../render/models/model';
 
-export function closestIntersection(cameraPos: vec3, rayDirection: vec3, scene: Array<Sphere>, tMin: number, tMax: number): { closestSphere: Sphere, closestT: number } {
-    let closestSphere: Sphere = null;
+export function closestIntersection(cameraPos: vec3, rayDirection: vec3, scene: Array<Model>, tMin: number, tMax: number): { closestSphere: Model, closestT: number } {
+    let closestSphere: Model = null;
     let closestT: number = Number.MAX_SAFE_INTEGER;
 
     for (let sphere of scene) {
