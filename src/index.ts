@@ -90,6 +90,7 @@ function render(time: number): void {
   gl.uniformMatrix4fv(viewUniformLocation, false, camera.view.elements);
 
   canvas.clear();
+
   gl.drawElements(gl.TRIANGLES, obj.indices.length, gl.UNSIGNED_INT, 0);
 }
 
@@ -106,7 +107,6 @@ async function start(): Promise<void> {
 
   const vertexBuffer: WebGLBuffer = gl.createBuffer();
   const indicesBuffer: WebGLBuffer = gl.createBuffer();
-
 
   verticesCoord = new Float32Array(obj.vertices);
 
