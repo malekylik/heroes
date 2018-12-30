@@ -3,7 +3,7 @@ import * as glm from 'glm-js'
 export class Canvas {
 
   private readonly _canvasHTML: HTMLCanvasElement;
-  private readonly _gl: WebGLRenderingContext;
+  private readonly _gl: WebGL2RenderingContext;
   private _bgColor: glm.vec4 = glm.vec4(0.0, 0.0, 0.0, 1.0);
 
   private static canvas: Canvas;
@@ -16,7 +16,7 @@ export class Canvas {
     return this._canvasHTML;
   }
 
-  get gl(): WebGLRenderingContext {
+  get gl(): WebGL2RenderingContext {
     return this._gl;
   }
 
@@ -52,7 +52,7 @@ export class Canvas {
 
   private constructor(canvasHTML: HTMLCanvasElement) {
     this._canvasHTML = canvasHTML;
-    this._gl = canvasHTML.getContext('webgl');
+    this._gl = canvasHTML.getContext('webgl2');
   }
 
 }

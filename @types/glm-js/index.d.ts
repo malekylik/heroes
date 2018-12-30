@@ -25,22 +25,22 @@ declare module 'glm-js' {
         '*': (vec: vec4 | mat4) => mat4;
         '*=': (vec: mat4) => mat4;
         '=': (vec: mat4 |
-                [number, number, number, number] |
-                [number, number, number, number, number, number, number, number, number] |
-                [number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number]
-            ) => mat4;
+            [number, number, number, number] |
+            [number, number, number, number, number, number, number, number, number] |
+            [number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number]
+        ) => mat4;
         '==': (vec: mat4) => boolean;
         '~=': (vec: mat4) => boolean;
-        copy: (vec: mat4 | 
-                    [number, number, number, number] |
-                    [number, number, number, number, number, number, number, number, number] |
-                    [number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number]
-                ) => mat4;
+        copy: (vec: mat4 |
+            [number, number, number, number] |
+            [number, number, number, number, number, number, number, number, number] |
+            [number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number]
+        ) => mat4;
         eql: (vec: mat4) => boolean;
         eql_epsilon: (vec: mat4) => boolean;
         mul: (vec: vec4 | mat4) => mat4;
         mul_eq: (vec: mat4) => mat4;
-        
+
     }
 
     export type vec2 = {};
@@ -184,10 +184,21 @@ declare module 'glm-js' {
     /**
      * Converts degrees to radians
      *
-     * @param {number} angle degrees
+     * @param {number} degrees degrees
      * @returns {number} radians
      */
-    export function radians(angle: number): number;
+    export function radians(degrees: number): number;
+    export function degrees(radians: number): number;
+
+    export function normalize(vec: vec4): vec4;
+    export function normalize(vec: vec3): vec3;
+    export function normalize(vec: vec2): vec2;
+
+    export function cross(vec1: vec4, vec2: vec4): vec4;
+    export function cross(vec1: vec3, vec2: vec3): vec3;
+    export function cross(vec1: vec2, vec2: vec2): vec2;
+
+    export function lookAt(eye: vec3, center: vec3, up: vec3): mat4;
 
     export function translate(vec: vec3): mat4;
 
