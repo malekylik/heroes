@@ -131,15 +131,14 @@ export abstract class Camera implements Updateable {
             this.stateKey.setFocus(true); 
             this.stateKey.isFirstMouse = true;
         });
+
         canvas.addEventListener('blur', () => { 
             this.stateKey.setFocus(false); 
             this.stateKey.isFirstMouse = true;
         });
-        canvas.addEventListener('mouseleave', () => { 
-            this.stateKey.isFirstMouse = true;
-        });
 
-        //right click missed
+        canvas.addEventListener('mouseleave', () => this.stateKey.isFirstMouse = true);
+        canvas.addEventListener('contextmenu', (e) => e.preventDefault());        
         
         this.flagUpdater
             .pipe(distinctUntilChanged())

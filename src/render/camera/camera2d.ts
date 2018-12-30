@@ -24,9 +24,7 @@ export class Camera2D extends Camera {
         this.moveMouse(ev.clientX, ev.clientY);
     }
 
-    updateKeyboard(ev: KeyboardEvent): void {
-
-    }
+    updateKeyboard(_: KeyboardEvent): void { }
 
     moveMouse(x: number, y: number): void {
         if (this.stateKey.focus) {

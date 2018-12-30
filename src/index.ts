@@ -16,7 +16,7 @@ const height: number = window.innerHeight;
 const bgColor: glm.vec4 = glm.vec4(0.0, 0.5, 0.0, 1.0);
 const perspective: glm.mat4 = glm.perspective(glm.radians(60), width / height, 1, 1000);
 const translate: glm.mat4 = glm.translate(glm.vec3(0, 0, 0));
-const path: string = './src/IronMan.obj';
+const path: string = './src/Teapot.obj';
 
 const A_POSITION: string = 'a_Position';
 const PERSPECTIVE: string = 'perspective';

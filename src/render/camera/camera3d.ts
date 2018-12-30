@@ -36,12 +36,6 @@ export class Camera3D extends Camera {
             this._mousePosX = x;
             this._mousePosY = y;
 
-            if (this.stateKey.isFirstFocus) {
-                this._pitch = glm.degrees(Math.round(Math.asin(this.cameraFront.y) * ACCURACY_ROUND) / ACCURACY_ROUND);
-                this._yaw = glm.degrees(Math.asin(this.cameraFront.z / Math.cos(glm.radians(this._pitch))));
-                this.stateKey.isFirstFocus = false;
-            }
-
             this.stateKey.isFirstMouse = false;
 
             return;
@@ -59,9 +53,9 @@ export class Camera3D extends Camera {
         if (this._pitch > 89) this._pitch = 89;
         if (this._pitch < -89) this._pitch = -89;
 
-        this.cameraFront.x = Math.cos(glm.radians(this._pitch)) * Math.cos(glm.radians(this._yaw))
+        this.cameraFront.x = Math.cos(glm.radians(this._pitch)) * Math.cos(glm.radians(this._yaw));
         this.cameraFront.y = Math.sin(glm.radians(this._pitch));
-        this.cameraFront.z = Math.cos(glm.radians(this._pitch)) * Math.sin(glm.radians(this._yaw))
+        this.cameraFront.z = Math.cos(glm.radians(this._pitch)) * Math.sin(glm.radians(this._yaw));
         this.cameraFront = glm.normalize(this.cameraFront);
 
         super.moveMouse(x, y);
@@ -79,6 +73,8 @@ export class Camera3D extends Camera {
             cameraSpeed,
             mouseSpeed);
 
+        this._pitch = glm.degrees(Math.round(Math.asin(this.cameraFront.y) * ACCURACY_ROUND) / ACCURACY_ROUND);
+        this._yaw = glm.degrees(Math.asin(this.cameraFront.z / Math.cos(glm.radians(this._pitch))));
     }
 
 }

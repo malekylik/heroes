@@ -6,7 +6,6 @@ export class StateKeys {
     keyS: boolean = false;
     keyD: boolean = false;
     focus: boolean = false;
-    isFirstFocus: boolean = true;
     isFirstMouse: boolean = true;
 
     setKey(keyCode: number, state: boolean): void {
