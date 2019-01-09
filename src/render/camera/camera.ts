@@ -99,7 +99,8 @@ export abstract class Camera implements Updateable {
         this.flagUpdater.next(true);
     }
 
-    moveMouse(x: number, y: number): void {
+    // moveMouse(x: number, y: number): void {
+    moveMouse(_: number, __: number): void {
         this.flagUpdater.next(true);
     }
 

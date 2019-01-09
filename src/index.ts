@@ -1,12 +1,11 @@
 import * as glm from 'glm-js';
 import * as OBJ from 'webgl-obj-loader';
 
-import { fromEvent, Observable, Subscription } from 'rxjs';
+import { fromEvent, Subscription } from 'rxjs';
 import { map } from 'rxjs/operators';
 
 import { Canvas } from './render/canvas/canvas';
 import { Camera } from './render/camera/camera';
-import { Camera2D } from './render/camera/camera2d';
 import { Camera3D } from './render/camera/camera3d';
 
 const canvas: Canvas = Canvas.getCanvas();
@@ -158,3 +157,4 @@ const mouseEventSubscription: Subscription = fromEvent(canvas.canvasHTML, 'mouse
   });
 
 start();
+
