@@ -1,10 +1,6 @@
-import { Type, sizeof } from '.';
-import { Pointer, align } from './type';
-
-export type StructP = Pointer;
-export interface StructDefenition {
-    [key: string]: Type;
-}
+import { Type, sizeof } from '../';
+import { align } from '../type';
+import { StructGetters, StructMeta, StructP, FullPropertyDescription, PropertyDescription, StructDefenition } from './interfaces';
 
 export class StructType extends Type {
     readonly size: number;
@@ -22,7 +18,7 @@ export class StructType extends Type {
 
 export function defineStruct(structDifinition: StructDefenition): StructType {
     const keys: string[] = Object.keys(structDifinition);
-    const layout: Array<ProperyDiscription> = new Array(keys.length);
+    const layout: Array<PropertyDescription> = new Array(keys.length);
     let size: number = 0;
     let propertySize: number = 0;
     let property: string;
@@ -68,19 +64,21 @@ export function getPropertyOffsetFromStruct(structType: StructType, property: st
     return structType.meta[property].offset;
 }
 
-interface StructMeta {
-    [key: string]: {
-        offset: number;
-        type: Type;
+export function getPropertiesDescription(structType: StructType): Array<FullPropertyDescription> {
+    const propertiesName: string[] = Object.keys(structType.meta);
+    const properties: Array<FullPropertyDescription> = new Array(propertiesName.length);
+
+    for (let i = 0; i < propertiesName.length; i++) {
+        const name: string = propertiesName[i];
+        const { offset, type } = structType.meta[name];
+        properties[i] = {
+            name: name,
+            type: type,
+            offset: offset,
+            size: sizeof(type),
+        };
     }
-}
 
-interface StructGetters {
-    [key: string]: (struct: StructP) => number;
-}
-
-interface ProperyDiscription { 
-    property: string; 
-    size: number;
+    return properties;
 }
 
