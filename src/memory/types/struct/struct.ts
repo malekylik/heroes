@@ -1,5 +1,5 @@
 import { Type, sizeof } from '../';
-import { align } from '../type';
+import { alignBin } from '../type';
 import { StructGetters, StructMeta, StructP, FullPropertyDescription, PropertyDescription, StructDefenition } from './interfaces';
 
 export class StructType extends Type {
@@ -53,7 +53,7 @@ export function defineStruct(structDifinition: StructDefenition): StructType {
         offset += propertySize;
     }
     
-    return new StructType(meta, align(size), getters);
+    return new StructType(meta, alignBin(size), getters);
 }
 
 export function getAddressFromStruct(structType: StructType, struct: StructP, property: string): number {

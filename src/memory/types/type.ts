@@ -38,7 +38,15 @@ export function sizeof(t: Type): number {
     return t.size;
 }
 
-export function align(size: number): number {
+export function alignTo(size: number, value: number): number {
+    return size + ((value - size % value) % value);
+}
+
+export function alignTo8(size: number): number {
+    return alignTo(size, 8);
+}
+
+export function alignBin(size: number): number {
     return alignRec(size, 0, alignedSizes.length - 1);
 }
 
@@ -61,5 +69,5 @@ const alignedSizes = [
     2**23,  2**24,  2**25,  2**26,  
     2**27,  2**28,  2**29,  2**30,  
     2**31,  2**32,
-];  
+];
 
