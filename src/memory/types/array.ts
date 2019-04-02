@@ -1,5 +1,5 @@
 import { Type } from '.';
-import { sizeof, align, Pointer } from './type';
+import { sizeof, Pointer, alignBin, alignTo8 } from './type';
 
 export type ArrayP = Pointer;
 
@@ -32,9 +32,9 @@ export class ArrayType extends Type {
 }
 
 export function defineArray(type: Type, length: number): ArrayType {
-    const size: number = align(sizeof(type) * length);
+    let size: number = (sizeof(type) * length);
     
-    return new ArrayType(type, length, size);
+    return new ArrayType(type, length, size < 8 ? alignBin(size) : alignTo8(size));
 }
 
 export function getAddressFromArray(arrayType: ArrayType, array: ArrayP, i: number): number {

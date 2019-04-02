@@ -1,5 +1,5 @@
 import { Type, sizeof } from '../';
-import { alignBin } from '../type';
+import { alignBin, alignTo8 } from '../type';
 import { StructGetters, StructMeta, StructP, FullPropertyDescription, PropertyDescription, StructDefenition } from './interfaces';
 
 export class StructType extends Type {
@@ -26,6 +26,7 @@ export function defineStruct(structDifinition: StructDefenition): StructType {
     for (let i = 0; i < keys.length; i++) {
         property = keys[i];
         propertySize = sizeof(structDifinition[property]);
+        propertySize = propertySize < 8 ? alignBin(propertySize) : alignTo8(propertySize);
         size += propertySize;
         layout[i] = { property, size: propertySize };
     }
@@ -53,7 +54,7 @@ export function defineStruct(structDifinition: StructDefenition): StructType {
         offset += propertySize;
     }
     
-    return new StructType(meta, alignBin(size), getters);
+    return new StructType(meta, size ? alignBin(size) : alignTo8(size), getters);
 }
 
 export function getAddressFromStruct(structType: StructType, struct: StructP, property: string): number {

@@ -51,12 +51,12 @@ export function alignBin(size: number): number {
 }
 
 function alignRec(size: number, l: number, r: number): number {
-    if (r - l <= 1) return alignedSizes[r];
+    if (r - l === 0) return alignedSizes[l];
 
     const median: number = toInt32((r + l) / 2);
 
     if (size <= alignedSizes[median]) return alignRec(size, l, median);
-    else return alignRec(size, median, r);
+    return alignRec(size, median + 1, r);
 }
 
 const alignedSizes = [
