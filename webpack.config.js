@@ -1,11 +1,10 @@
 const path = require('path');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const CleanWebpackPlugin = require('clean-webpack-plugin');
+const TerserPlugin = require('terser-webpack-plugin');
 const { CheckerPlugin } = require('awesome-typescript-loader');
-const mode = process.env.NODE_ENV ? process.env.NODE_ENV: 'development';
 
-module.exports = {
-  mode: mode,
+const config = {
   resolve: {
     extensions: ['.ts', '.js']
   },
@@ -17,7 +16,6 @@ module.exports = {
     chunkFilename: '[name].[hash].js',
     path: path.resolve(__dirname, 'dist')
   },
-  devtool: 'inline-source-map',
   devServer: {
     contentBase: './dist',
     historyApiFallback: {
@@ -52,11 +50,24 @@ module.exports = {
         cacheGroups: {
           vendor: {
                 test: /node_modules/,
-                name: "vendor",
-                chunks: "initial",
+                name: 'vendor',
+                chunks: 'initial',
                 enforce: true
             }
         }
-    }
+    },
+    minimizer: [new TerserPlugin()],
   }
+};
+
+module.exports = (env, argv) => {
+
+  if (argv.mode === 'production') {
+    config.mode = 'production';
+  } else {
+    config.mode = 'development';
+    config.devtool = 'eval';
+  }
+
+  return config;
 };
