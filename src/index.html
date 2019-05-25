@@ -10,7 +10,11 @@
 </head>
 <body>
 
-    <script src="<%= htmlWebpackPlugin.files.chunks.vendor.entry  %>"></script>
-    <script src="<%= htmlWebpackPlugin.files.chunks.main.entry %>"></script>
+    <% if (htmlWebpackPlugin.files.chunks.vendor) { %>
+        <script src="<%= htmlWebpackPlugin.files.chunks.vendor.entry  %>"></script>
+    <% } %>
+    <% if (htmlWebpackPlugin.files.chunks.main.entry) { %>
+        <script src="<%= htmlWebpackPlugin.files.chunks.main.entry  %>"></script>
+    <% } %>
 </body>
 </html>
