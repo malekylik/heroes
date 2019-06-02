@@ -1,7 +1,9 @@
-export function assert(condition: boolean): void {
+export function assert(condition: boolean): boolean {
     if (!condition) {
         throw "Assertation doesn't work!";
     }
+
+    return condition;
 }
 
 export function createArray<U>(length: number, initValue: U): Array<U> {
