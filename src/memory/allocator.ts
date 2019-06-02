@@ -206,8 +206,9 @@ function set_inuse_and_pinuse(a: Allocator, _: mstate, p: mchunkptr, s: number):
 }
 
 /* Set size, cinuse and pinuse bit of this chunk */
-// #define set_size_and_pinuse_of_inuse_chunk(M, p, s)\
-//   ((p)->head = (s|PINUSE_BIT|CINUSE_BIT))
+function set_size_and_pinuse_of_inuse_chunk(a: Allocator, _: mstate, p: mchunkptr, s: number): void { // #define set_size_and_pinuse_of_inuse_chunk(M, p, s)\
+  setHeadValue(a, p, s | PINUSE_BIT | CINUSE_BIT); // ((p)->head = (s|PINUSE_BIT|CINUSE_BIT))
+}
 
 // #else /* FOOTERS */
 
@@ -350,9 +351,13 @@ function chunksize(a: Allocator,p: mchunkptr): number { // ((p)->head & ~(FLAG_B
 // const set_flag4(p)        ((p)->head |= FLAG4_BIT)
 // const clear_flag4(p)      ((p)->head &= ~FLAG4_BIT)
 
-// /* Treat space at ptr +/- offset as a chunk */
-// const chunk_plus_offset(p, s)  ((mchunkptr)(((char*)(p)) + (s)))
-// const chunk_minus_offset(p, s) ((mchunkptr)(((char*)(p)) - (s)))
+/* Treat space at ptr +/- offset as a chunk */
+function chunk_plus_offset(p: mchunkptr, s: Pointer): mchunkptr { // #define chunk_plus_offset(p, s)  ((mchunkptr)(((char*)(p)) + (s)))
+  return p + s;
+}
+function chunk_minus_offset(p: mchunkptr, s: Pointer): mchunkptr { // #define chunk_minus_offset(p, s) ((mchunkptr)(((char*)(p)) - (s)))
+  return p - s;
+}
 
 // /* Ptr to next or previous physical malloc_chunk. */
 // const next_chunk(p) ((mchunkptr)( ((char*)(p)) + ((p)->head & ~FLAG_BITS)))
@@ -362,12 +367,19 @@ function chunksize(a: Allocator,p: mchunkptr): number { // ((p)->head & ~(FLAG_B
 // const next_pinuse(p)  ((next_chunk(p)->head) & PINUSE_BIT)
 
 // /* Get/set size at footer */
-// const get_foot(p, s)  (((mchunkptr)((char*)(p) + (s)))->prev_foot)
-// const set_foot(p, s)  (((mchunkptr)((char*)(p) + (s)))->prev_foot = (s))
+function get_foot(a: Allocator, p: mchunkptr, s: Pointer): void { // #define get_foot(p, s)  (((mchunkptr)((char*)(p) + (s)))->prev_foot)
+  getFootValue(a, p + s);
+}
+function set_foot(a: Allocator, p: mchunkptr, s: Pointer): void { // #define set_foot(p, s)  (((mchunkptr)((char*)(p) + (s)))->prev_foot = (s))
+  setFootValue(a, p + s, s);
+}
 
-// /* Set size, pinuse bit, and foot */
-// const set_size_and_pinuse_of_free_chunk(p, s)\
-//   ((p)->head = (s|PINUSE_BIT), set_foot(p, s))
+/* Set size, pinuse bit, and foot */
+function set_size_and_pinuse_of_free_chunk(a: Allocator, p: mchunkptr, s: number): void { //  #define set_size_and_pinuse_of_free_chunk(p, s)
+  setHeadValue(a, p, s | PINUSE_BIT); // ((p)->head = (s|PINUSE_BIT), set_foot(p, s))
+  set_foot(a, p, s);
+}
+
 
 // /* Set size, pinuse bit, foot, and clear next pinuse */
 // const set_free_with_pinuse(p, s, n)\
@@ -539,6 +551,18 @@ const prevFootOffset: number = 0;
 const headOffset: number = prevFootOffset + prevFoot;
 const fdOffset: number = headOffset + head;
 const bkOffset: number = fdOffset + fd;
+
+function getFootAddress(chunck: mchunkptr): mchunkptr {
+  return chunck + prevFootOffset;
+}
+
+function getFootValue(a: Allocator, chunck: mchunkptr): mchunkptr {
+  return get4Byte(a, getFootAddress(chunck));
+}
+
+function setFootValue(a: Allocator, chunck: mchunkptr, size: number): mchunkptr {
+  return set4Byte(a, getFootAddress(chunck), size);
+}
 
 function getHeadAddress(chunck: mchunkptr): mchunkptr {
   return chunck + headOffset;
@@ -718,10 +742,10 @@ const MAX_SMALL_REQUEST: number     = MAX_SMALL_SIZE - CHUNK_ALIGN_MASK - CHUNK_
 interface mallocState {         // struct malloc_state {
   smallmap: binmap_t            //   binmap_t   smallmap;
                                 //   binmap_t   treemap;
-                                //   size_t     dvsize;
+  dvsize: number;               //   size_t     dvsize;
                                 //   size_t     topsize;
   least_addr: Pointer;          //   char*      least_addr;
-                                //   mchunkptr  dv;
+  dv: mchunkptr;                //   mchunkptr  dv;
   top: mchunkptr;               //   mchunkptr  top;
                                 //   size_t     trim_check;
                                 //   size_t     release_checks;
@@ -780,7 +804,9 @@ function ensure_initialization(): void { // #define ensure_initialization() (voi
 /* The global malloc_state used for all non-"mspace" calls */
 const _gm_: mstate = { // static struct malloc_state _gm_;
   smallmap: 0,
+  dvsize: 0,
   least_addr: 0,
+  dv: 0,
   top: 0,
   smallbins: createArray<mchunkptr>((NSMALLBINS + 1) * 2, 0),
 };
@@ -1253,69 +1279,45 @@ function idx2bit(i: bindex_t): binmap_t {  // #define idx2bit(i)              ((
 }
 
 /* Mark/Clear bits with given index */
-// #define mark_smallmap(M,i)      ((M)->smallmap |=  idx2bit(i))
+function mark_smallmap(M: mstate, i: bindex_t): void { // #define mark_smallmap(M,i)      ((M)->smallmap |=  idx2bit(i))
+  M.smallmap |=  idx2bit(i);
+}
 function clear_smallmap(M: mstate, i: bindex_t): void { // #define clear_smallmap(M,i)     ((M)->smallmap &= ~idx2bit(i))
   M.smallmap &= ~idx2bit(i);
 }
-// #define smallmap_is_marked(M,i) ((M)->smallmap &   idx2bit(i))
+function smallmap_is_marked(M: mstate, i: bindex_t): boolean {// #define smallmap_is_marked(M,i) ((M)->smallmap &   idx2bit(i))
+  return Boolean(M.smallmap & idx2bit(i));
+}
 
 // #define mark_treemap(M,i)       ((M)->treemap  |=  idx2bit(i))
 // #define clear_treemap(M,i)      ((M)->treemap  &= ~idx2bit(i))
 // #define treemap_is_marked(M,i)  ((M)->treemap  &   idx2bit(i))
 
 // /* isolate the least set bit of a bitmap */
-// #define least_bit(x)         ((x) & -(x))
+function least_bit(x: bindex_t): number { // #define least_bit(x)         ((x) & -(x))
+  return  (x) & -(x);
+}
 
-// /* mask with all bits to left of least bit of x on */
-// #define left_bits(x)         ((x<<1) | -(x<<1))
+/* mask with all bits to left of least bit of x on */
+function left_bits(x: bindex_t): number { // #define left_bits(x)         ((x<<1) | -(x<<1))
+  return (x << 1) | -(x << 1);
+}
 
-// /* mask with all bits to left of or equal to least bit of x on */
+/* mask with all bits to left of or equal to least bit of x on */
 // #define same_or_left_bits(x) ((x) | -(x))
 
-// /* index corresponding to given bit. Use x86 asm if possible */
+/* index corresponding to given bit. Use x86 asm if possible */
 
-// #if defined(__GNUC__) && (defined(__i386__) || defined(__x86_64__))
-// #define compute_bit2idx(X, I)\
-// {\
-//   unsigned int J;\
-//   J = __builtin_ctz(X); \
-//   I = (bindex_t)J;\
-// }
-
-// #elif defined (__INTEL_COMPILER)
-// #define compute_bit2idx(X, I)\
-// {\
-//   unsigned int J;\
-//   J = _bit_scan_forward (X); \
-//   I = (bindex_t)J;\
-// }
-
-// #elif defined(_MSC_VER) && _MSC_VER>=1300
-// #define compute_bit2idx(X, I)\
-// {\
-//   unsigned int J;\
-//   _BitScanForward((DWORD *) &J, X);\
-//   I = (bindex_t)J;\
-// }
-
-// #elif USE_BUILTIN_FFS
-// #define compute_bit2idx(X, I) I = ffs(X)-1
-
-// #else
-// #define compute_bit2idx(X, I)\
-// {\
-//   unsigned int Y = X - 1;\
-//   unsigned int K = Y >> (16-4) & 16;\
-//   unsigned int N = K;        Y >>= K;\
-//   N += K = Y >> (8-3) &  8;  Y >>= K;\
-//   N += K = Y >> (4-2) &  4;  Y >>= K;\
-//   N += K = Y >> (2-1) &  2;  Y >>= K;\
-//   N += K = Y >> (1-0) &  1;  Y >>= K;\
-//   I = (bindex_t)(N + Y);\
-// }
-// #endif /* GNUC */
-
-
+function compute_bit2idx(X: binmap_t): bindex_t { // #define compute_bit2idx(X, I)\
+  let Y: number = toInt32(X - 1 < 0 ? MAX_SIZE_T : X - 1); // Y = X - 1;
+  let K: number = toInt32(Y >> (16 - 4) & 16); // unsigned int K = Y >> (16-4) & 16;\
+  let N: number = K; Y >>>= K; // unsigned int N = K;        Y >>= K;\
+  N += K = Y >> (8-3) &  8;  Y >>= K;
+  N += K = Y >> (4-2) &  4;  Y >>= K;
+  N += K = Y >> (2-1) &  2;  Y >>= K;
+  N += K = Y >> (1-0) &  1;  Y >>= K;
+  return N + Y;
+}
 
 /* ----------------------- Operations on smallbins ----------------------- */
 
@@ -1327,23 +1329,26 @@ function clear_smallmap(M: mstate, i: bindex_t): void { // #define clear_smallma
 */
 
 /* Link a free chunk into a smallbin  */
-// #define insert_small_chunk(M, P, S) {\
-//   bindex_t I  = small_index(S);\
-//   mchunkptr B = smallbin_at(M, I);\
-//   mchunkptr F = B;\
-//   assert(S >= MIN_CHUNK_SIZE);\
-//   if (!smallmap_is_marked(M, I))\
-//     mark_smallmap(M, I);\
-//   else if (RTCHECK(ok_address(M, B->fd)))\
-//     F = B->fd;\
-//   else {\
-//     CORRUPTION_ERROR_ACTION(M);\
-//   }\
-//   B->fd = P;\
-//   F->bk = P;\
-//   P->fd = F;\
-//   P->bk = B;\
-// }
+function insert_small_chunk(a: Allocator, M: mstate, P: mchunkptr, S: number) { // #define insert_small_chunk(M, P, S) {\
+  const I: bindex_t = small_index(S); // bindex_t I  = small_index(S);
+  const B: mchunkptr = smallbin_at(M, I); // mchunkptr B = smallbin_at(M, I);
+  let F: mchunkptr = B; // mchunkptr F = B;
+
+  assert(S >= MIN_CHUNK_SIZE);
+
+  if (!smallmap_is_marked(M, I)) {
+    mark_smallmap(M, I);
+  } else if (assert(ok_address(M, getForwardValue(a, B)))) {
+    F = getForwardValue(a, B); // F = B->fd;
+  } else {
+    CORRUPTION_ERROR_ACTION(M);
+  }
+
+  setForwardValue(a, B, P); // B->fd = P;
+  setBackwardValue(a, F, P); // F->bk = P;
+  setForwardValue(a, P, F); // P->fd = F;
+  setBackwardValue(a, P, B); // P->bk = B;
+}
 
 /* Unlink a chunk from a smallbin  */
 // #define unlink_small_chunk(M, P, S) {\
@@ -1393,16 +1398,19 @@ function unlink_first_small_chunk(a: Allocator, M: mstate, B: mchunkptr, P: mchu
 
 /* Replace dv node, binning the old one */
 /* Used only when dvsize known to be small */
-// #define replace_dv(M, P, S) {\
-//   size_t DVS = M->dvsize;\
-//   assert(is_small(DVS));\
-//   if (DVS != 0) {\
-//     mchunkptr DV = M->dv;\
-//     insert_small_chunk(M, DV, DVS);\
-//   }\
-//   M->dvsize = S;\
-//   M->dv = P;\
-// }
+function replace_dv(a: Allocator, M: mstate, P: mchunkptr, S: number) { // #define replace_dv(M, P, S) {\
+  const DVS: number = M.dvsize; // size_t DVS = M->dvsize;\
+
+  assert(is_small(DVS));
+
+  if (DVS !== 0) {
+    const DV: mchunkptr = M.dv; // mchunkptr DV = M->dv;\
+    insert_small_chunk(a, M, DV, DVS);
+  }
+
+  M.dvsize = S; // M->dvsize = S;
+  M.dv = P; //  M->dv = P;
+}
 
 
 /* -------------------------- System allocation -------------------------- */
@@ -1682,40 +1690,41 @@ function dlmalloc(a: Allocator, bytes: number): Pointer { // void* dlmalloc(size
 
           // goto postaction;
           return mem;
+        } else if (nb > gm.dvsize) {
+            if (smallbits != 0) { /* Use chunk in next nonempty smallbin */
+            const leftbits: binmap_t = (smallbits << idx) & left_bits(idx2bit(idx)); // binmap_t leftbits = (smallbits << idx) & left_bits(idx2bit(idx));
+            const leastbit: binmap_t = least_bit(leftbits); // binmap_t leastbit = least_bit(leftbits);
+            const i : bindex_t = compute_bit2idx(leastbit); // bindex_t i; // compute_bit2idx(leastbit, i);
+            const b: mchunkptr = smallbin_at(gm, i); // mchunkptr b, p, r; //           b = smallbin_at(gm, i);
+            const p: mchunkptr = getForwardValue(a, b);
+            const rsize: number = small_index2size(i) - nb; //size_t rsize;
+            let r: mchunkptr;
+
+            assert(chunksize(a, p) == small_index2size(i));
+
+            unlink_first_small_chunk(a, gm, b, p, i);
+
+            /* Fit here cannot be remainderless if 4byte sizes */
+            if (SIZE_T_SIZE != 4 && rsize < MIN_CHUNK_SIZE) {
+              set_inuse_and_pinuse(a, gm, p, small_index2size(i));
+            } else {
+              set_size_and_pinuse_of_inuse_chunk(a, gm, p, nb);
+              r = chunk_plus_offset(p, nb);
+              set_size_and_pinuse_of_free_chunk(a, r, rsize);
+              replace_dv(a, gm, r, rsize);
+            }
+
+            mem = chunk2mem(p);
+            check_malloced_chunk(gm, mem, nb);
+            // goto postaction;
+
+            return mem;
+          }
+          // else if (gm->treemap != 0 && (mem = tmalloc_small(gm, nb)) != 0) {
+          // check_malloced_chunk(gm, mem, nb);
+          // goto postaction;
+          // }
         }
-
-// else if (nb > gm->dvsize) {
-//     if (smallbits != 0) { /* Use chunk in next nonempty smallbin */
-//     mchunkptr b, p, r;
-//     size_t rsize;
-//     bindex_t i;
-//     binmap_t leftbits = (smallbits << idx) & left_bits(idx2bit(idx));
-//     binmap_t leastbit = least_bit(leftbits);
-//     compute_bit2idx(leastbit, i);
-//     b = smallbin_at(gm, i);
-//     p = b->fd;
-//     assert(chunksize(p) == small_index2size(i));
-//     unlink_first_small_chunk(gm, b, p, i);
-//     rsize = small_index2size(i) - nb;
-//     /* Fit here cannot be remainderless if 4byte sizes */
-//     if (SIZE_T_SIZE != 4 && rsize < MIN_CHUNK_SIZE)
-//         set_inuse_and_pinuse(gm, p, small_index2size(i));
-//     else {
-//         set_size_and_pinuse_of_inuse_chunk(gm, p, nb);
-//         r = chunk_plus_offset(p, nb);
-//         set_size_and_pinuse_of_free_chunk(r, rsize);
-//         replace_dv(gm, r, rsize);
-//     }
-//     mem = chunk2mem(p);
-//     check_malloced_chunk(gm, mem, nb);
-//     goto postaction;
-//     }
-
-//     else if (gm->treemap != 0 && (mem = tmalloc_small(gm, nb)) != 0) {
-//     check_malloced_chunk(gm, mem, nb);
-//     goto postaction;
-//     }
-// }
 // }
 // else if (bytes >= MAX_REQUEST)
 // nb = MAX_SIZE_T; /* Too big to allocate. Force failure (in sys alloc) */
