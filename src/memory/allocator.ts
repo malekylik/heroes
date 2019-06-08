@@ -6,7 +6,7 @@ import { createArray, assert } from '../utils';
 const PAGE_SIZE = 4096;
 
 export class Allocator {
-    memory: SharedArrayBuffer;
+    memory: ArrayBuffer;
     totalSize: number;
     freeSize: number;
 
@@ -19,7 +19,7 @@ export class Allocator {
 
 export function createAllocator(size: number, options?: object): Allocator {
     const allocator: Allocator = new Allocator();
-    const memory: SharedArrayBuffer = new ArrayBuffer(size);
+    const memory: ArrayBuffer = new ArrayBuffer(size);
     const alignedSize: number = alignTo(PAGE_SIZE, size);
 
     allocator.freeChuncks = new Array(1);
@@ -161,7 +161,7 @@ function CORRUPTION_ERROR_ACTION(_: mstate): never { // #define CORRUPTION_ERROR
 }
 
 let ok_address: (M: mstate, a: Pointer) => boolean;
-// let ok_next;
+let ok_next: (p: Pointer, n: Pointer) => boolean;
 // let ok_inuse;
 // let ok_pinuse;
 
@@ -171,7 +171,9 @@ if (!INSECURE) {
     return a >= M.least_addr;
   }
   // /* Check if address of next chunk n is higher than base chunk p */
-  // #define ok_next(p, n)    ((char*)(p) < (char*)(n))
+  ok_next = function (p: Pointer, n: Pointer): boolean { // #define ok_next(p, n)    ((char*)(p) < (char*)(n))
+    return p < n;
+  }
   // /* Check if p has inuse status */
   // #define ok_inuse(p)     is_inuse(p)
   // /* Check if p has its pinuse bit on */
@@ -180,7 +182,8 @@ if (!INSECURE) {
   ok_address = function (_: mstate, __: Pointer): boolean { //   #define ok_address(M, a) (1)
     return true;
   }
-  // #define ok_next(b, n)    (1)
+
+  ok_next = function (p: Pointer, n: Pointer): boolean { return true; } // #define ok_next(b, n)    (1)
   // #define ok_inuse(p)      (1)
   // #define ok_pinuse(p)     (1)
 }
@@ -585,7 +588,7 @@ function getForwardValue(a: Allocator, chunck: mchunkptr): mchunkptr {
 }
 
 function setForwardValue(a: Allocator, chunck: mchunkptr, fd: mchunkptr): mchunkptr {
-  return set4Byte(a, getBackwardAddress(chunck), fd);
+  return set4Byte(a, getForwardAddress(chunck), fd);
 }
 
 function getBackwardAddress(chunck: mchunkptr): mchunkptr {
@@ -740,8 +743,8 @@ const MAX_SMALL_SIZE: number        = MIN_LARGE_SIZE - SIZE_T_ONE; // #define MA
 const MAX_SMALL_REQUEST: number     = MAX_SMALL_SIZE - CHUNK_ALIGN_MASK - CHUNK_OVERHEAD; // #define MAX_SMALL_REQUEST (MAX_SMALL_SIZE - CHUNK_ALIGN_MASK - CHUNK_OVERHEAD)
 
 interface mallocState {         // struct malloc_state {
-  smallmap: binmap_t            //   binmap_t   smallmap;
-                                //   binmap_t   treemap;
+  smallmap: binmap_t;           //   binmap_t   smallmap;
+  treemap: binmap_t;            //   binmap_t   treemap;
   dvsize: number;               //   size_t     dvsize;
                                 //   size_t     topsize;
   least_addr: Pointer;          //   char*      least_addr;
@@ -751,7 +754,7 @@ interface mallocState {         // struct malloc_state {
                                 //   size_t     release_checks;
                                 //   size_t     magic;
   smallbins: Array<mchunkptr>;  //   mchunkptr  smallbins[(NSMALLBINS+1)*2];
-                                //   tbinptr    treebins[NTREEBINS];
+  treebins: Array<tbinptr>;     //   tbinptr    treebins[NTREEBINS];
                                 //   size_t     footprint;
                                 //   size_t     max_footprint;
                                 //   size_t     footprint_limit; /* zero means no limit */
@@ -804,11 +807,13 @@ function ensure_initialization(): void { // #define ensure_initialization() (voi
 /* The global malloc_state used for all non-"mspace" calls */
 const _gm_: mstate = { // static struct malloc_state _gm_;
   smallmap: 0,
+  treemap: 0,
   dvsize: 0,
   least_addr: 0,
   dv: 0,
   top: 0,
   smallbins: createArray<mchunkptr>((NSMALLBINS + 1) * 2, 0),
+  treebins: createArray<tbinptr>(NTREEBINS, 0),
 };
 const gm: mstate = _gm_; // #define gm                 (&_gm_)
 function is_global(M: mstate):boolean { // #define is_global(M)       ((M) == &_gm_)
@@ -819,6 +824,173 @@ function is_global(M: mstate):boolean { // #define is_global(M)       ((M) == &_
 
 function is_initialized(M: mstate): boolean {// #define is_initialized(M)  ((M)->top != 0)
     return M.top !== 0;
+}
+
+/* ---------------------- Overlaid data structures ----------------------- */
+
+/*
+  When chunks are not in use, they are treated as nodes of either
+  lists or trees.
+
+  "Small"  chunks are stored in circular doubly-linked lists, and look
+  like this:
+
+    chunk-> +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+            |             Size of previous chunk                            |
+            +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    `head:' |             Size of chunk, in bytes                         |P|
+      mem-> +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+            |             Forward pointer to next chunk in list             |
+            +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+            |             Back pointer to previous chunk in list            |
+            +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+            |             Unused space (may be 0 bytes long)                .
+            .                                                               .
+            .                                                               |
+nextchunk-> +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    `foot:' |             Size of chunk, in bytes                           |
+            +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+  Larger chunks are kept in a form of bitwise digital trees (aka
+  tries) keyed on chunksizes.  Because malloc_tree_chunks are only for
+  free chunks greater than 256 bytes, their size doesn't impose any
+  constraints on user chunk sizes.  Each node looks like:
+
+    chunk-> +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+            |             Size of previous chunk                            |
+            +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    `head:' |             Size of chunk, in bytes                         |P|
+      mem-> +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+            |             Forward pointer to next chunk of same size        |
+            +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+            |             Back pointer to previous chunk of same size       |
+            +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+            |             Pointer to left child (child[0])                  |
+            +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+            |             Pointer to right child (child[1])                 |
+            +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+            |             Pointer to parent                                 |
+            +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+            |             bin index of this chunk                           |
+            +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+            |             Unused space                                      .
+            .                                                               |
+nextchunk-> +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    `foot:' |             Size of chunk, in bytes                           |
+            +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+  Each tree holding treenodes is a tree of unique chunk sizes.  Chunks
+  of the same size are arranged in a circularly-linked list, with only
+  the oldest chunk (the next to be used, in our FIFO ordering)
+  actually in the tree.  (Tree members are distinguished by a non-null
+  parent pointer.)  If a chunk with the same size an an existing node
+  is inserted, it is linked off the existing node using pointers that
+  work in the same way as fd/bk pointers of small chunks.
+
+  Each tree contains a power of 2 sized range of chunk sizes (the
+  smallest is 0x100 <= x < 0x180), which is is divided in half at each
+  tree level, with the chunks in the smaller half of the range (0x100
+  <= x < 0x140 for the top nose) in the left subtree and the larger
+  half (0x140 <= x < 0x180) in the right subtree.  This is, of course,
+  done by inspecting individual bits.
+
+  Using these rules, each node's left subtree contains all smaller
+  sizes than its right subtree.  However, the node at the root of each
+  subtree has no particular ordering relationship to either.  (The
+  dividing line between the subtree sizes is based on trie relation.)
+  If we remove the last chunk of a given size from the interior of the
+  tree, we need to replace it with a leaf node.  The tree ordering
+  rules permit a node to be replaced by any leaf below it.
+
+  The smallest chunk in a tree (a common operation in a best-fit
+  allocator) can be found by walking a path to the leftmost leaf in
+  the tree.  Unlike a usual binary tree, where we follow left child
+  pointers until we reach a null, here we follow the right child
+  pointer any time the left one is null, until we reach a leaf with
+  both child pointers null. The smallest chunk in the tree will be
+  somewhere along that path.
+
+  The worst case number of steps to add, find, or remove a node is
+  bounded by the number of bits differentiating chunks within
+  bins. Under current bin calculations, this ranges from 6 up to 21
+  (for 32 bit sizes) or up to 53 (for 64 bit sizes). The typical case
+  is of course much better.
+*/
+
+// struct malloc_tree_chunk {
+//   /* The first four fields must be compatible with malloc_chunk */
+// const prevFoot: number      = SIZE_T_SIZE; //   size_t                    prev_foot;
+// const head: number          = SIZE_T_SIZE; //   size_t                    head;
+// const fd: mchunkptr         = SIZE_T_SIZE; //   struct malloc_tree_chunk* fd;
+// const bk: mchunkptr         = SIZE_T_SIZE; //   struct malloc_tree_chunk* bk;
+const leftChild: tbinptr       = SIZE_T_SIZE; //   struct malloc_tree_chunk* child[2];
+const rigthChild: tbinptr      = SIZE_T_SIZE;
+const parent: tbinptr          = SIZE_T_SIZE; // struct malloc_tree_chunk* parent;
+const index: bindex_t          = SIZE_T_SIZE; //   bindex_t                  index;
+// };
+
+// typedef struct malloc_tree_chunk  tchunk;
+type tchunkptr = Pointer; // typedef struct malloc_tree_chunk* tchunkptr;
+type tbinptr = Pointer;  // typedef struct malloc_tree_chunk* tbinptr; /* The type of bins of trees */
+
+const leftChildOffset: number = bkOffset + bk;
+const rigthChildOffset: number = leftChildOffset + leftChild;
+const parentOffset: number = rigthChildOffset + rigthChild;
+const indexOffset: number = parentOffset + parent;
+
+function getLeftChildAddress(chunck: mchunkptr): mchunkptr {
+  return chunck + leftChildOffset;
+}
+
+function getLeftChildValue(a: Allocator, chunck: mchunkptr): mchunkptr {
+  return get4Byte(a, getLeftChildAddress(chunck));
+}
+
+function setLeftChildValue(a: Allocator, chunck: mchunkptr, size: number): mchunkptr {
+  return set4Byte(a, getLeftChildAddress(chunck), size);
+}
+
+function getRigthChildAddress(chunck: mchunkptr): mchunkptr {
+  return chunck + rigthChildOffset;
+}
+
+function getRigthChildValue(a: Allocator, chunck: mchunkptr): mchunkptr {
+  return get4Byte(a, getRigthChildAddress(chunck));
+}
+
+function setRigthChildValue(a: Allocator, chunck: mchunkptr, size: number): mchunkptr {
+  return set4Byte(a, getRigthChildAddress(chunck), size);
+}
+
+function getParentAddress(chunck: mchunkptr): mchunkptr {
+  return chunck + parentOffset;
+}
+
+function getParentValue(a: Allocator, chunck: mchunkptr): mchunkptr {
+  return get4Byte(a, getParentAddress(chunck));
+}
+
+function setParentValue(a: Allocator, chunck: mchunkptr, fd: mchunkptr): mchunkptr {
+  return set4Byte(a, getParentAddress(chunck), fd);
+}
+
+function getIndexAddress(chunck: mchunkptr): mchunkptr {
+  return chunck + indexOffset;
+}
+
+function getIndexValue(a: Allocator, chunck: mchunkptr): mchunkptr {
+  return get4Byte(a, getIndexAddress(chunck));
+}
+
+function setIndexValue(a: Allocator, chunck: mchunkptr, bk: mchunkptr): mchunkptr {
+  return set4Byte(a, getIndexAddress(chunck), bk);
+}
+
+/* A little helper macro for trees */
+function leftmost_child(a: Allocator, t: tchunkptr): tchunkptr { // #define leftmost_child(t) ((t)->child[0] != 0? (t)->child[0] : (t)->child[1])
+  const leftChild: mchunkptr = getLeftChildValue(a, t);
+
+  return leftChild != 0 ? leftChild : getRigthChildValue(a, t);
 }
 
 /* -------------------------- system alloc setup ------------------------- */
@@ -1113,7 +1285,9 @@ function small_index2size(i: bindex_t): number { // #define small_index2size(i) 
 function smallbin_at(M: mstate, i: bindex_t): sbinptr { // #define smallbin_at(M, i)   ((sbinptr)((char*)&((M)->smallbins[(i)<<1])))
   return M.smallbins[i << 1];
 }
-  // #define treebin_at(M,i)     (&((M)->treebins[i]))
+function treebin_at(M: mstate, i: bindex_t): tchunkptr { // #define treebin_at(M,i)     (&((M)->treebins[i]))
+  return M.treebins[i];
+}
 
 // /* assign tree index for size S to variable I. Use x86 asm if possible  */
 // #if defined(__GNUC__) && (defined(__i386__) || defined(__x86_64__))
@@ -1290,7 +1464,9 @@ function smallmap_is_marked(M: mstate, i: bindex_t): boolean {// #define smallma
 }
 
 // #define mark_treemap(M,i)       ((M)->treemap  |=  idx2bit(i))
-// #define clear_treemap(M,i)      ((M)->treemap  &= ~idx2bit(i))
+function clear_treemap(M: mstate, i: binmap_t): void { // #define clear_treemap(M,i)      ((M)->treemap  &= ~idx2bit(i))
+  M.treemap &= ~idx2bit(i);
+}
 // #define treemap_is_marked(M,i)  ((M)->treemap  &   idx2bit(i))
 
 // /* isolate the least set bit of a bitmap */
@@ -1412,6 +1588,185 @@ function replace_dv(a: Allocator, M: mstate, P: mchunkptr, S: number) { // #defi
   M.dv = P; //  M->dv = P;
 }
 
+/* ------------------------- Operations on trees ------------------------- */
+
+/* Insert chunk into tree */
+// #define insert_large_chunk(M, X, S) {\
+//   tbinptr* H;\
+//   bindex_t I;\
+//   compute_tree_index(S, I);\
+//   H = treebin_at(M, I);\
+//   X->index = I;\
+//   X->child[0] = X->child[1] = 0;\
+//   if (!treemap_is_marked(M, I)) {\
+//     mark_treemap(M, I);\
+//     *H = X;\
+//     X->parent = (tchunkptr)H;\
+//     X->fd = X->bk = X;\
+//   }\
+//   else {\
+//     tchunkptr T = *H;\
+//     size_t K = S << leftshift_for_tree_index(I);\
+//     for (;;) {\
+//       if (chunksize(T) != S) {\
+//         tchunkptr* C = &(T->child[(K >> (SIZE_T_BITSIZE-SIZE_T_ONE)) & 1]);\
+//         K <<= 1;\
+//         if (*C != 0)\
+//           T = *C;\
+//         else if (RTCHECK(ok_address(M, C))) {\
+//           *C = X;\
+//           X->parent = T;\
+//           X->fd = X->bk = X;\
+//           break;\
+//         }\
+//         else {\
+//           CORRUPTION_ERROR_ACTION(M);\
+//           break;\
+//         }\
+//       }\
+//       else {\
+//         tchunkptr F = T->fd;\
+//         if (RTCHECK(ok_address(M, T) && ok_address(M, F))) {\
+//           T->fd = F->bk = X;\
+//           X->fd = F;\
+//           X->bk = T;\
+//           X->parent = 0;\
+//           break;\
+//         }\
+//         else {\
+//           CORRUPTION_ERROR_ACTION(M);\
+//           break;\
+//         }\
+//       }\
+//     }\
+//   }\
+// }
+
+/*
+  Unlink steps:
+
+  1. If x is a chained node, unlink it from its same-sized fd/bk links
+     and choose its bk node as its replacement.
+  2. If x was the last node of its size, but not a leaf node, it must
+     be replaced with a leaf node (not merely one with an open left or
+     right), to make sure that lefts and rights of descendents
+     correspond properly to bit masks.  We use the rightmost descendent
+     of x.  We could use any other leaf, but this is easy to locate and
+     tends to counteract removal of leftmosts elsewhere, and so keeps
+     paths shorter than minimally guaranteed.  This doesn't loop much
+     because on average a node in a tree is near the bottom.
+  3. If x is the base of a chain (i.e., has parent links) relink
+     x's parent and children to x's replacement (or null if none).
+*/
+
+function unlink_large_chunk(a: Allocator, M: mstate, X: tchunkptr) { // #define unlink_large_chunk(M, X) {\
+  const XP: tchunkptr = getParentValue(a, X); //   tchunkptr XP = X->parent;\
+  let R: tchunkptr; //   tchunkptr R;\
+
+  if (getBackwardValue(a, X) !== X) { // if (X->bk != X) {\
+    const F: tchunkptr = getForwardValue(a, X); //     tchunkptr F = X->fd;\
+
+    R = getBackwardValue(a, X); //     R = X->bk;\
+
+    if (assert(ok_address(M, F) && getBackwardValue(a, F) === X && getForwardValue(a, R) === X)) { //     if (RTCHECK(ok_address(M, F) && F->bk == X && R->fd == X)) {\
+      setBackwardValue(a, F, R); //       F->bk = R;\
+      setForwardValue(a, R, F);  //       R->fd = F;\
+    } else {
+      CORRUPTION_ERROR_ACTION(M);
+    }
+  } else {
+    let RP: tchunkptr; //     tchunkptr* RP;\
+
+    if (
+        ((R = (RP = (getRigthChildValue(a, X)))) != 0) || //     if (((R = *(RP = &(X->child[1]))) != 0) ||\
+        ((R = (RP = (getLeftChildValue(a, X))))  != 0)
+       ) { //         ((R = *(RP = &(X->child[0]))) != 0)) {\
+      let CP: tchunkptr; //       tchunkptr* CP;\
+
+      while (((CP = (getRigthChildValue(a, R))) != 0) || //       while ((*(CP = &(R->child[1])) != 0) ||\
+            ( (CP = (getLeftChildValue(a, R)))  != 0)) { //              (*(CP = &(R->child[0])) != 0)) {\
+        R = (RP = CP) //         R = *(RP = CP);\
+      }
+
+      if (assert(ok_address(M, RP))) { // if (RTCHECK(ok_address(M, RP)))\
+        RP = 0; //         *RP = 0;\
+      } else {
+        CORRUPTION_ERROR_ACTION(M);
+      }
+    }
+  } if (XP != 0) {
+    let H: tbinptr = treebin_at(M, getIndexValue(a, X)); //     tbinptr* H = treebin_at(M, X->index);\
+
+    if (X === H) { //     if (X == *H) {\
+      if ((H = R) === 0) {//       if ((*H = R) == 0) \
+        clear_treemap(M, getIndexValue(a, X)); //         clear_treemap(M, X->index);\
+      }
+    } else if (assert(ok_address(M, XP))) {
+        if (getLeftChildValue(a, XP) === X) { //       if (XP->child[0] == X) \
+          setLeftChildValue(a, XP, R); //         XP->child[0] = R;\
+        } else {
+          setRigthChildValue(a, XP, R); //         XP->child[1] = R;\
+        }
+    } else {
+      CORRUPTION_ERROR_ACTION(M);
+    }
+
+    if (R != 0) {
+      if (assert(ok_address(M, R))) {
+        let C0: tchunkptr; //         tchunkptr C0, C1;\
+        let C1: tchunkptr;
+
+        setParentValue(a, R, XP); //         R->parent = XP;\
+
+        if ((C0 = getLeftChildValue(a, X)) !== 0) { //         if ((C0 = X->child[0]) != 0) {\
+          if (assert(ok_address(M, C0))) {
+            setLeftChildValue(a, R, C0); //          R->child[0] = C0;\
+            setParentValue(a, C0, R); //             C0->parent = R;\
+          } else {
+            CORRUPTION_ERROR_ACTION(M);
+          }
+        } if ((C1 = getRigthChildValue(a, X)) !== 0) { //         if ((C1 = X->child[1]) != 0) {\
+            if (assert(ok_address(M, C1))) {
+              setRigthChildValue(a, R, C1); //         R->child[1] = C1;\
+              setParentValue(a, C1, R); //             C1->parent = R;\
+          } else {
+            CORRUPTION_ERROR_ACTION(M);
+          }
+        }
+      } else {
+        CORRUPTION_ERROR_ACTION(M);
+      }
+    }
+  }
+}
+
+// /* Relays to large vs small bin operations */
+
+// #define insert_chunk(M, P, S)\
+//   if (is_small(S)) insert_small_chunk(M, P, S)\
+//   else { tchunkptr TP = (tchunkptr)(P); insert_large_chunk(M, TP, S); }
+
+// #define unlink_chunk(M, P, S)\
+//   if (is_small(S)) unlink_small_chunk(M, P, S)\
+//   else { tchunkptr TP = (tchunkptr)(P); unlink_large_chunk(M, TP); }
+
+
+// /* Relays to internal calls to malloc/free from realloc, memalign etc */
+
+// #if ONLY_MSPACES
+// #define internal_malloc(m, b) mspace_malloc(m, b)
+// #define internal_free(m, mem) mspace_free(m,mem);
+// #else /* ONLY_MSPACES */
+// #if MSPACES
+// #define internal_malloc(m, b)\
+//   ((m == gm)? dlmalloc(b) : mspace_malloc(m, b))
+// #define internal_free(m, mem)\
+//    if (m == gm) dlfree(mem); else mspace_free(m,mem);
+// #else /* MSPACES */
+// #define internal_malloc(m, b) dlmalloc(b)
+// #define internal_free(m, mem) dlfree(mem)
+// #endif /* MSPACES */
+// #endif /* ONLY_MSPACES */
 
 /* -------------------------- System allocation -------------------------- */
 
@@ -1631,6 +1986,118 @@ function sys_alloc(m: mstate, nb: number): Pointer {
 
   /* ---------------------------- malloc --------------------------- */
 
+  /* allocate a large request from the best fitting chunk in a treebin */
+// static void* tmalloc_large(mstate m, size_t nb) {
+//   tchunkptr v = 0;
+//   size_t rsize = -nb; /* Unsigned negation */
+//   tchunkptr t;
+//   bindex_t idx;
+//   compute_tree_index(nb, idx);
+//   if ((t = *treebin_at(m, idx)) != 0) {
+//     /* Traverse tree for this bin looking for node with size == nb */
+//     size_t sizebits = nb << leftshift_for_tree_index(idx);
+//     tchunkptr rst = 0;  /* The deepest untaken right subtree */
+//     for (;;) {
+//       tchunkptr rt;
+//       size_t trem = chunksize(t) - nb;
+//       if (trem < rsize) {
+//         v = t;
+//         if ((rsize = trem) == 0)
+//           break;
+//       }
+//       rt = t->child[1];
+//       t = t->child[(sizebits >> (SIZE_T_BITSIZE-SIZE_T_ONE)) & 1];
+//       if (rt != 0 && rt != t)
+//         rst = rt;
+//       if (t == 0) {
+//         t = rst; /* set t to least subtree holding sizes > nb */
+//         break;
+//       }
+//       sizebits <<= 1;
+//     }
+//   }
+//   if (t == 0 && v == 0) { /* set t to root of next non-empty treebin */
+//     binmap_t leftbits = left_bits(idx2bit(idx)) & m->treemap;
+//     if (leftbits != 0) {
+//       bindex_t i;
+//       binmap_t leastbit = least_bit(leftbits);
+//       compute_bit2idx(leastbit, i);
+//       t = *treebin_at(m, i);
+//     }
+//   }
+
+//   while (t != 0) { /* find smallest of tree or subtree */
+//     size_t trem = chunksize(t) - nb;
+//     if (trem < rsize) {
+//       rsize = trem;
+//       v = t;
+//     }
+//     t = leftmost_child(t);
+//   }
+
+//   /*  If dv is a better fit, return 0 so malloc will use it */
+//   if (v != 0 && rsize < (size_t)(m->dvsize - nb)) {
+//     if (RTCHECK(ok_address(m, v))) { /* split */
+//       mchunkptr r = chunk_plus_offset(v, nb);
+//       assert(chunksize(v) == rsize + nb);
+//       if (RTCHECK(ok_next(v, r))) {
+//         unlink_large_chunk(m, v);
+//         if (rsize < MIN_CHUNK_SIZE)
+//           set_inuse_and_pinuse(m, v, (rsize + nb));
+//         else {
+//           set_size_and_pinuse_of_inuse_chunk(m, v, nb);
+//           set_size_and_pinuse_of_free_chunk(r, rsize);
+//           insert_chunk(m, r, rsize);
+//         }
+//         return chunk2mem(v);
+//       }
+//     }
+//     CORRUPTION_ERROR_ACTION(m);
+//   }
+//   return 0;
+// }
+
+/* allocate a small request from the best fitting chunk in a treebin */
+function tmalloc_small(a: Allocator, m: mstate, nb: number): Pointer { // static void* tmalloc_small(mstate m, size_t nb) {
+  const leastbit: binmap_t = least_bit(m.treemap);// binmap_t leastbit = least_bit(m->treemap);
+  const i: bindex_t = compute_bit2idx(leastbit); // bindex_t i;
+  let t: tchunkptr = treebin_at(m, i); // tchunkptr t, v;
+  let v: tchunkptr = t; // v = t = *treebin_at(m, i);
+  let rsize: number = chunksize(a, t) - nb; // size_t rsize; rsize = chunksize(t) - nb;
+
+  while ((t = leftmost_child(a, t)) != 0) {
+    const trem: number = chunksize(a, t) - nb; // size_t trem = chunksize(t) - nb;
+
+    if (trem < rsize) {
+      rsize = trem;
+      v = t;
+    }
+  }
+
+  if (assert(ok_address(m, v))) {
+    const r: mchunkptr = chunk_plus_offset(v, nb); // mchunkptr r = chunk_plus_offset(v, nb);
+
+    assert(chunksize(a, v) == rsize + nb);
+
+    if (assert(ok_next(v, r))) {
+      unlink_large_chunk(a, m, v);
+
+      if (rsize < MIN_CHUNK_SIZE) {
+        set_inuse_and_pinuse(a, m, v, (rsize + nb));
+      } else {
+        set_size_and_pinuse_of_inuse_chunk(a, m, v, nb);
+        set_size_and_pinuse_of_free_chunk(a, r, rsize);
+        replace_dv(a, m, r, rsize);
+      }
+
+      return chunk2mem(v);
+    }
+  }
+
+  CORRUPTION_ERROR_ACTION(m);
+  return 0;
+}
+
 function dlmalloc(a: Allocator, bytes: number): Pointer { // void* dlmalloc(size_t bytes) {
 /*
     Basic algorithm:
@@ -1689,6 +2156,7 @@ function dlmalloc(a: Allocator, bytes: number): Pointer { // void* dlmalloc(size
           check_malloced_chunk(gm, mem, nb);
 
           // goto postaction;
+          POSTACTION(gm);
           return mem;
         } else if (nb > gm.dvsize) {
             if (smallbits != 0) { /* Use chunk in next nonempty smallbin */
@@ -1718,12 +2186,15 @@ function dlmalloc(a: Allocator, bytes: number): Pointer { // void* dlmalloc(size
             check_malloced_chunk(gm, mem, nb);
             // goto postaction;
 
+            POSTACTION(gm);
+            return mem;
+          } else if (gm.treemap != 0 && (mem = tmalloc_small(a, gm, nb)) != 0) {
+            check_malloced_chunk(gm, mem, nb);
+
+            // goto postaction;
+            POSTACTION(gm);
             return mem;
           }
-          // else if (gm->treemap != 0 && (mem = tmalloc_small(gm, nb)) != 0) {
-          // check_malloced_chunk(gm, mem, nb);
-          // goto postaction;
-          // }
         }
 // }
 // else if (bytes >= MAX_REQUEST)
