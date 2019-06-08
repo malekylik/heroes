@@ -2501,25 +2501,33 @@ function dlmalloc(a: Allocator, bytes: number): Pointer { // void* dlmalloc(size
       }
     }
 
-// if (nb <= gm->dvsize) {
-// size_t rsize = gm->dvsize - nb;
-// mchunkptr p = gm->dv;
-// if (rsize >= MIN_CHUNK_SIZE) { /* split dv */
-//     mchunkptr r = gm->dv = chunk_plus_offset(p, nb);
-//     gm->dvsize = rsize;
-//     set_size_and_pinuse_of_free_chunk(r, rsize);
-//     set_size_and_pinuse_of_inuse_chunk(gm, p, nb);
-// }
-// else { /* exhaust dv */
-//     size_t dvs = gm->dvsize;
-//     gm->dvsize = 0;
-//     gm->dv = 0;
-//     set_inuse_and_pinuse(gm, p, dvs);
-// }
-// mem = chunk2mem(p);
-// check_malloced_chunk(gm, mem, nb);
-// goto postaction;
-// }
+  if (nb <= gm.dvsize) {
+    const rsize: number = gm.dvsize - nb; // size_t rsize = gm->dvsize - nb;
+    const p: mchunkptr =  gm.dv; // mchunkptr p = gm->dv;
+
+    if (rsize >= MIN_CHUNK_SIZE) { /* split dv */
+      const r: mchunkptr = gm.dv = chunk_plus_offset(p, nb); // mchunkptr r = gm->dv = chunk_plus_offset(p, nb);
+
+      gm.dvsize = rsize; // gm->dvsize = rsize;
+
+      set_size_and_pinuse_of_free_chunk(a, r, rsize);
+      set_size_and_pinuse_of_inuse_chunk(a, gm, p, nb);
+    } else { /* exhaust dv */
+      const dvs: number = gm.dvsize; // size_t dvs = gm->dvsize;
+
+      gm.dvsize = 0; // gm->dvsize = 0;
+      gm.dv = 0; // gm->dv = 0;
+
+      set_inuse_and_pinuse(a, gm, p, dvs);
+    }
+      mem = chunk2mem(p);
+
+      check_malloced_chunk(a, gm, mem, nb);
+
+    // goto postaction;
+      POSTACTION(gm);
+      return mem;
+  }
 
 // else if (nb < gm->topsize) { /* Split top */
 // size_t rsize = gm->topsize -= nb;
