@@ -242,6 +242,7 @@ function set_size_and_pinuse_of_inuse_chunk(a: Allocator, _: mstate, p: mchunkpt
 /* -------------------------- Debugging setup ---------------------------- */
 
 let check_malloced_chunk: (a: Allocator, M: mstate, P: Pointer, N: number) => void;
+let check_top_chunk: (a: Allocator, M: mstate, P: Pointer) => void;
 
 if (!DEBUG) {
   // #define check_free_chunk(M,P)
@@ -249,11 +250,11 @@ if (!DEBUG) {
   check_malloced_chunk = function (_, __, ___, ____): void {} // #define check_malloced_chunk(M,P,N)
   // #define check_mmapped_chunk(M,P)
   // #define check_malloc_state(M)
-  // #define check_top_chunk(M,P)
+  check_top_chunk = function (_, __, ___): void {} // #define check_top_chunk(M,P)
 } else { // #else /* DEBUG */
   // #define check_free_chunk(M,P)       do_check_free_chunk(M,P)
   // #define check_inuse_chunk(M,P)      do_check_inuse_chunk(M,P)
-  // #define check_top_chunk(M,P)        do_check_top_chunk(M,P)
+  check_top_chunk = do_check_top_chunk; // #define check_top_chunk(M,P)        do_check_top_chunk(M,P)
   check_malloced_chunk = do_check_malloced_chunk; // #define check_malloced_chunk(M,P,N) do_check_malloced_chunk(M,P,N)
   // #define check_mmapped_chunk(M,P)    do_check_mmapped_chunk(M,P)
   // #define check_malloc_state(M)       do_check_malloc_state(M)
@@ -1044,7 +1045,7 @@ interface mallocState {         // struct malloc_state {
   smallmap: binmap_t;           //   binmap_t   smallmap;
   treemap: binmap_t;            //   binmap_t   treemap;
   dvsize: number;               //   size_t     dvsize;
-                                //   size_t     topsize;
+  topsize: number;              //   size_t     topsize;
   least_addr: Pointer;          //   char*      least_addr;
   dv: mchunkptr;                //   mchunkptr  dv;
   top: mchunkptr;               //   mchunkptr  top;
@@ -1107,6 +1108,7 @@ const _gm_: mstate = { // static struct malloc_state _gm_;
   smallmap: 0,
   treemap: 0,
   dvsize: 0,
+  topsize: 0,
   least_addr: 0,
   dv: 0,
   top: 0,
@@ -2527,19 +2529,24 @@ function dlmalloc(a: Allocator, bytes: number): Pointer { // void* dlmalloc(size
     // goto postaction;
       POSTACTION(gm);
       return mem;
-  }
+  } else if (nb < gm.topsize) { /* Split top */
+    const rsize: number = gm.topsize -= nb; // size_t rsize = gm->topsize -= nb;
+    const p: mchunkptr = gm.top; // mchunkptr p = gm->top;
+    const r = gm.top = chunk_plus_offset(p, nb); // mchunkptr r = gm->top = chunk_plus_offset(p, nb);
 
-// else if (nb < gm->topsize) { /* Split top */
-// size_t rsize = gm->topsize -= nb;
-// mchunkptr p = gm->top;
-// mchunkptr r = gm->top = chunk_plus_offset(p, nb);
-// r->head = rsize | PINUSE_BIT;
-// set_size_and_pinuse_of_inuse_chunk(gm, p, nb);
-// mem = chunk2mem(p);
-// check_top_chunk(gm, gm->top);
-// check_malloced_chunk(gm, mem, nb);
-// goto postaction;
-// }
+    setHeadValue(a, r, rsize | PINUSE_BIT); // r->head = rsize | PINUSE_BIT;
+
+    set_size_and_pinuse_of_inuse_chunk(a, gm, p, nb);
+
+    mem = chunk2mem(p);
+
+    check_top_chunk(a, gm, gm.top);
+    check_malloced_chunk(a, gm, mem, nb);
+
+    // goto postaction;
+    POSTACTION(gm);
+    return mem;
+  }
 
   mem = sys_alloc(gm, nb);
 
