@@ -20,7 +20,8 @@ export class Allocator {
 export function createAllocator(size: number, options?: object): Allocator {
     const allocator: Allocator = new Allocator();
     const memory: ArrayBuffer = new ArrayBuffer(size);
-    const alignedSize: number = alignTo(PAGE_SIZE, size);
+    // const alignedSize: number = alignTo(PAGE_SIZE, size);
+    const alignedSize: number = size;
 
     allocator.freeChuncks = new Array(1);
     allocator.freeChuncks[0] = {
@@ -267,10 +268,10 @@ function do_check_any_chunk(a: Allocator, m: mstate, p: mchunkptr): void { // st
   assert(ok_address(m, p));
 }
 
-// /* Check properties of top chunk */
-// static void do_check_top_chunk(mstate m, mchunkptr p) {
+/* Check properties of top chunk */
+function do_check_top_chunk(a: Allocator, m: mstate, p: mchunkptr): void { // static void do_check_top_chunk(mstate m, mchunkptr p) {
 //   msegmentptr sp = segment_holding(m, (char*)p);
-//   size_t  sz = p->head & ~INUSE_BITS; /* third-lowest bit can be set! */
+  // size_t  sz = p->head & ~INUSE_BITS; /* third-lowest bit can be set! */
 //   assert(sp != 0);
 //   assert((is_aligned(chunk2mem(p))) || (p->head == FENCEPOST_HEAD));
 //   assert(ok_address(m, p));
@@ -279,7 +280,7 @@ function do_check_any_chunk(a: Allocator, m: mstate, p: mchunkptr): void { // st
 //   assert(sz == ((sp->base + sp->size) - (char*)p) - TOP_FOOT_SIZE);
 //   assert(pinuse(p));
 //   assert(!pinuse(chunk_plus_offset(p, sz)));
-// }
+}
 
 /* Check properties of (inuse) mmapped chunks */
 function do_check_mmapped_chunk(a: Allocator, m: mstate, p: mchunkptr): void { // static void do_check_mmapped_chunk(mstate m, mchunkptr p) {
@@ -582,10 +583,11 @@ function is_aligned(A: Pointer): boolean { // #define is_aligned(A)       (((siz
   return ((A) & (CHUNK_ALIGN_MASK)) == 0;
 }
 
-// /* the number of bytes to offset an address to align it */
-// const align_offset(A)\
-//  ((((size_t)(A) & CHUNK_ALIGN_MASK) == 0)? 0 :\
-//   ((MALLOC_ALIGNMENT - ((size_t)(A) & CHUNK_ALIGN_MASK)) & CHUNK_ALIGN_MASK))
+/* the number of bytes to offset an address to align it */
+function align_offset(A: number): number { // #define align_offset(A)\
+  return (((A) & CHUNK_ALIGN_MASK) === 0) ? 0 :   //  ((((size_t)(A) & CHUNK_ALIGN_MASK) == 0)? 0 :\
+  ((MALLOC_ALIGNMENT - ((A) & CHUNK_ALIGN_MASK)) & CHUNK_ALIGN_MASK);    //   ((MALLOC_ALIGNMENT - ((size_t)(A) & CHUNK_ALIGN_MASK)) & CHUNK_ALIGN_MASK))
+}
 
 /* -------------------------- MMAP preliminaries ------------------------- */
 
@@ -1382,13 +1384,12 @@ function use_mmap(M: mstate): number { // #define use_mmap(M)           ((M)->mf
 // #define should_trim(M,s)  (0)
 // #endif /* MORECORE_CANNOT_TRIM */
 
-// /*
-//   TOP_FOOT_SIZE is padding at the end of a segment, including space
-//   that may be needed to place segment records and fenceposts when new
-//   noncontiguous segments are added.
-// */
-// #define TOP_FOOT_SIZE\
-//   (align_offset(chunk2mem(0))+pad_request(sizeof(struct malloc_segment))+MIN_CHUNK_SIZE)
+/*
+  TOP_FOOT_SIZE is padding at the end of a segment, including space
+  that may be needed to place segment records and fenceposts when new
+  noncontiguous segments are added.
+*/
+const TOP_FOOT_SIZE: number = 0; // #define TOP_FOOT_SIZE (align_offset(chunk2mem(0))+pad_request(sizeof(struct malloc_segment))+MIN_CHUNK_SIZE)
 
 /* -------------------------------  Hooks -------------------------------- */
 
@@ -2044,17 +2045,160 @@ function insert_chunk(a: Allocator, M: mstate, P: mchunkptr, S: number): void { 
 // #endif /* MSPACES */
 // #endif /* ONLY_MSPACES */
 
+/* -------------------------- mspace management -------------------------- */
+
+/* Initialize top chunk and its size */
+function init_top(a: Allocator, m: mstate, p: mchunkptr, psize: number): void { // static void init_top(mstate m, mchunkptr p, size_t psize) {
+  /* Ensure alignment */
+  const offset: number = align_offset(chunk2mem(p)); //   size_t offset = align_offset(chunk2mem(p));
+  p = p + offset; //   p = (mchunkptr)((char*)p + offset);
+  psize -= offset; //   psize -= offset;
+
+  m.top = p; //   m->top = p;
+  m.topsize = psize; //   m->topsize = psize;
+  setHeadValue(a, p, psize | PINUSE_BIT); //   p->head = psize | PINUSE_BIT;
+
+  /* set size of fake trailing chunk holding overhead space only once */
+  setHeadValue(a, chunk_plus_offset(p, psize), TOP_FOOT_SIZE); // chunk_plus_offset(p, psize)->head = TOP_FOOT_SIZE;
+  //   m->trim_check = mparams.trim_threshold; /* reset on each update */
+}
+
+/* Initialize bins for a new mstate that is otherwise zeroed out */
+function init_bins (a: Allocator, m: mstate): void { // static void init_bins(mstate m) {
+  /* Establish circular links for smallbins */
+  let i: bindex_t;  // bindex_t i;
+
+  for (i = 0; i < NSMALLBINS; ++i) {
+    const bin: sbinptr = smallbin_at(m,i); //     sbinptr bin = smallbin_at(m,i);
+    setForwardValue(a, bin, setBackwardValue(a, bin, bin));  //     bin->fd = bin->bk = bin;
+  }
+}
+
+// #if PROCEED_ON_ERROR
+
+// /* default corruption action */
+// static void reset_on_error(mstate m) {
+//   int i;
+//   ++malloc_corruption_error_count;
+//   /* Reinitialize fields to forget about all memory */
+//   m->smallmap = m->treemap = 0;
+//   m->dvsize = m->topsize = 0;
+//   m->seg.base = 0;
+//   m->seg.size = 0;
+//   m->seg.next = 0;
+//   m->top = m->dv = 0;
+//   for (i = 0; i < NTREEBINS; ++i)
+//     *treebin_at(m, i) = 0;
+//   init_bins(m);
+// }
+// #endif /* PROCEED_ON_ERROR */
+
+// /* Allocate chunk and prepend remainder with chunk in successor base. */
+// static void* prepend_alloc(mstate m, char* newbase, char* oldbase,
+//                            size_t nb) {
+//   mchunkptr p = align_as_chunk(newbase);
+//   mchunkptr oldfirst = align_as_chunk(oldbase);
+//   size_t psize = (char*)oldfirst - (char*)p;
+//   mchunkptr q = chunk_plus_offset(p, nb);
+//   size_t qsize = psize - nb;
+//   set_size_and_pinuse_of_inuse_chunk(m, p, nb);
+
+//   assert((char*)oldfirst > (char*)q);
+//   assert(pinuse(oldfirst));
+//   assert(qsize >= MIN_CHUNK_SIZE);
+
+//   /* consolidate remainder with first chunk of old base */
+//   if (oldfirst == m->top) {
+//     size_t tsize = m->topsize += qsize;
+//     m->top = q;
+//     q->head = tsize | PINUSE_BIT;
+//     check_top_chunk(m, q);
+//   }
+//   else if (oldfirst == m->dv) {
+//     size_t dsize = m->dvsize += qsize;
+//     m->dv = q;
+//     set_size_and_pinuse_of_free_chunk(q, dsize);
+//   }
+//   else {
+//     if (!is_inuse(oldfirst)) {
+//       size_t nsize = chunksize(oldfirst);
+//       unlink_chunk(m, oldfirst, nsize);
+//       oldfirst = chunk_plus_offset(oldfirst, nsize);
+//       qsize += nsize;
+//     }
+//     set_free_with_pinuse(q, qsize, oldfirst);
+//     insert_chunk(m, q, qsize);
+//     check_free_chunk(m, q);
+//   }
+
+//   check_malloced_chunk(m, chunk2mem(p), nb);
+//   return chunk2mem(p);
+// }
+
+// /* Add a segment to hold a new noncontiguous region */
+// static void add_segment(mstate m, char* tbase, size_t tsize, flag_t mmapped) {
+//   /* Determine locations and sizes of segment, fenceposts, old top */
+//   char* old_top = (char*)m->top;
+//   msegmentptr oldsp = segment_holding(m, old_top);
+//   char* old_end = oldsp->base + oldsp->size;
+//   size_t ssize = pad_request(sizeof(struct malloc_segment));
+//   char* rawsp = old_end - (ssize + FOUR_SIZE_T_SIZES + CHUNK_ALIGN_MASK);
+//   size_t offset = align_offset(chunk2mem(rawsp));
+//   char* asp = rawsp + offset;
+//   char* csp = (asp < (old_top + MIN_CHUNK_SIZE))? old_top : asp;
+//   mchunkptr sp = (mchunkptr)csp;
+//   msegmentptr ss = (msegmentptr)(chunk2mem(sp));
+//   mchunkptr tnext = chunk_plus_offset(sp, ssize);
+//   mchunkptr p = tnext;
+//   int nfences = 0;
+
+//   /* reset top to new space */
+//   init_top(m, (mchunkptr)tbase, tsize - TOP_FOOT_SIZE);
+
+//   /* Set up segment record */
+//   assert(is_aligned(ss));
+//   set_size_and_pinuse_of_inuse_chunk(m, sp, ssize);
+//   *ss = m->seg; /* Push current record */
+//   m->seg.base = tbase;
+//   m->seg.size = tsize;
+//   m->seg.sflags = mmapped;
+//   m->seg.next = ss;
+
+//   /* Insert trailing fenceposts */
+//   for (;;) {
+//     mchunkptr nextp = chunk_plus_offset(p, SIZE_T_SIZE);
+//     p->head = FENCEPOST_HEAD;
+//     ++nfences;
+//     if ((char*)(&(nextp->head)) < old_end)
+//       p = nextp;
+//     else
+//       break;
+//   }
+//   assert(nfences >= 2);
+
+//   /* Insert the rest of old top into a bin as an ordinary free chunk */
+//   if (csp != old_top) {
+//     mchunkptr q = (mchunkptr)old_top;
+//     size_t psize = csp - old_top;
+//     mchunkptr tn = chunk_plus_offset(q, psize);
+//     set_free_with_pinuse(q, psize, tn);
+//     insert_chunk(m, q, psize);
+//   }
+
+//   check_top_chunk(m, m->top);
+// }
+
 /* -------------------------- System allocation -------------------------- */
 
 /* 
     Get memory from system using MORECORE or MMAP
     void* sys_alloc(mstate m, size_t nb)
 */
-function sys_alloc(m: mstate, nb: number): Pointer {
-    // const tbase: Pointer = CMFAIL; // char* tbase = CMFAIL;
-    // const tsize: number = 0 // size_t tsize = 0;
+function sys_alloc(a: Allocator, m: mstate, nb: number): Pointer {
+    let tbase: Pointer = CMFAIL; // char* tbase = CMFAIL;
+    let tsize: number = 0 // size_t tsize = 0;
     // const mmap_flag: flag_t = 0; // flag_t mmap_flag = 0;
-    // const asize: number = 0; // size_t asize; /* allocation size */
+    const asize: number = 0; // size_t asize; /* allocation size */
 
     // ensure_initialization();
 
@@ -2191,7 +2335,10 @@ function sys_alloc(m: mstate, nb: number): Pointer {
 //     if ((m->footprint += tsize) > m->max_footprint)
 //     m->max_footprint = m->footprint;
 
-//     if (!is_initialized(m)) { /* first-time initialization */
+    if (!is_initialized(m)) { /* first-time initialization */
+      tbase = 0;
+      tsize = a.totalSize;
+
 //     if (m->least_addr == 0 || tbase < m->least_addr)
 //         m->least_addr = tbase;
 //     m->seg.base = tbase;
@@ -2199,11 +2346,12 @@ function sys_alloc(m: mstate, nb: number): Pointer {
 //     m->seg.sflags = mmap_flag;
 //     m->magic = mparams.magic;
 //     m->release_checks = MAX_RELEASE_CHECK_RATE;
-//     init_bins(m);
+    init_bins(a, m);
 // #if !ONLY_MSPACES
-//     if (is_global(m))
-//         init_top(m, (mchunkptr)tbase, tsize - TOP_FOOT_SIZE);
-//     else
+    // if (is_global(m))
+    // init_top(a, m, tbase, tsize - TOP_FOOT_SIZE); // init_top(m, (mchunkptr)tbase, tsize - TOP_FOOT_SIZE);
+    init_top(a, m, tbase, tsize - TOP_FOOT_SIZE); // init_top(m, (mchunkptr)tbase, tsize - TOP_FOOT_SIZE);
+    // else
 // #endif
 //     {
 //         /* Offset top by embedded malloc_state */
@@ -2244,19 +2392,23 @@ function sys_alloc(m: mstate, nb: number): Pointer {
 //     }
 //     }
 
-//     if (nb < m->topsize) { /* Allocate from new or extended top space */
-//     size_t rsize = m->topsize -= nb;
-//     mchunkptr p = m->top;
-//     mchunkptr r = m->top = chunk_plus_offset(p, nb);
-//     r->head = rsize | PINUSE_BIT;
-//     set_size_and_pinuse_of_inuse_chunk(m, p, nb);
-//     check_top_chunk(m, m->top);
-//     check_malloced_chunk(m, chunk2mem(p), nb);
-//     return chunk2mem(p);
-//     }
-// }
+    if (nb < m.topsize) { /* Allocate from new or extended top space */
+      const rsize: number = m.topsize -= nb; //     size_t rsize = m->topsize -= nb;
+      const p: mchunkptr = m.top; //     mchunkptr p = m->top;
+      const r = m.top = chunk_plus_offset(p, nb);  //     mchunkptr r = m->top = chunk_plus_offset(p, nb);
+
+      setHeadValue(a, r, rsize | PINUSE_BIT); //     r->head = rsize | PINUSE_BIT;
+      set_size_and_pinuse_of_inuse_chunk(a, m, p, nb); //     set_size_and_pinuse_of_inuse_chunk(m, p, nb);
+
+      check_top_chunk(a, m, m.top) //     check_top_chunk(m, m->top);
+      check_malloced_chunk(a, m, chunk2mem(p), nb); //     check_malloced_chunk(m, chunk2mem(p), nb);
+
+      return chunk2mem(p); //     return chunk2mem(p);
+    }
+}
 
 //     MALLOC_FAILURE_ACTION;
+    console.warn('sys_alloc: doesnt find space');
     return 0;
 }
 
@@ -2391,7 +2543,7 @@ function tmalloc_small(a: Allocator, m: mstate, nb: number): Pointer { // static
   return 0;
 }
 
-function dlmalloc(a: Allocator, bytes: number): Pointer { // void* dlmalloc(size_t bytes) {
+export function dlmalloc(a: Allocator, bytes: number): Pointer { // void* dlmalloc(size_t bytes) {
 /*
     Basic algorithm:
     If a small request (< 256 bytes minus per-chunk overhead):
@@ -2548,12 +2700,12 @@ function dlmalloc(a: Allocator, bytes: number): Pointer { // void* dlmalloc(size
     return mem;
   }
 
-  mem = sys_alloc(gm, nb);
+    mem = sys_alloc(a, gm, nb);
 
-// postaction:
-//     POSTACTION(gm);
-//     return mem;
-}
+    // postaction:
+    POSTACTION(gm);
+    return mem;
+  }
 
   return 0;
 }
