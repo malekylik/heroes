@@ -1,6 +1,6 @@
-import { Pointer, alignTo8, alignBin, alignTo } from './types';
+import { Pointer, alignTo8, alignBin } from './types';
 import { MemoryChunk } from './memory-chunk';
-import { toInt32 } from './coercion';
+import { toInt32, toUnsignedInt32 } from './coercion';
 import { createArray, assert } from '../utils';
 
 const PAGE_SIZE = 4096;
@@ -932,7 +932,7 @@ function mem2chunk(mem: Pointer): mchunkptr { // #define mem2chunk(mem)      ((m
 // #define align_as_chunk(A)   (mchunkptr)((A) + align_offset(chunk2mem(A)))
 
 /* Bounds on request (not chunk) sizes. */
-const MAX_REQUEST: number = ((-MIN_CHUNK_SIZE) << 2);                       //  #define MAX_REQUEST         ((-MIN_CHUNK_SIZE) << 2)
+const MAX_REQUEST: number = toUnsignedInt32(((-MIN_CHUNK_SIZE) << 2));                       //  #define MAX_REQUEST         ((-MIN_CHUNK_SIZE) << 2)
 const MIN_REQUEST: number = (MIN_CHUNK_SIZE - CHUNK_OVERHEAD - SIZE_T_ONE); // #define MIN_REQUEST         (MIN_CHUNK_SIZE - CHUNK_OVERHEAD - SIZE_T_ONE)
 
 /* pad request bytes into a usable size */
@@ -1738,12 +1738,12 @@ function treemap_is_marked(M: mstate, i: bindex_t): binmap_t { // #define treema
 
 // /* isolate the least set bit of a bitmap */
 function least_bit(x: bindex_t): number { // #define least_bit(x)         ((x) & -(x))
-  return  (x) & ((-x) << SIZE_T_BITSIZE >>> SIZE_T_BITSIZE);
+  return  (x) & (toUnsignedInt32(-x));
 }
 
 /* mask with all bits to left of least bit of x on */
 function left_bits(x: bindex_t): number { // #define left_bits(x)         ((x<<1) | -(x<<1))
-  return (x << 1) | ((-x << 1) << SIZE_T_BITSIZE >>> SIZE_T_BITSIZE);
+  return (x << 1) | (toUnsignedInt32(-x << 1));
 }
 
 /* mask with all bits to left of or equal to least bit of x on */
@@ -2418,7 +2418,7 @@ function sys_alloc(a: Allocator, m: mstate, nb: number): Pointer {
 function tmalloc_large(a: Allocator, m: mstate, nb: number): Pointer { // static void* tmalloc_large(mstate m, size_t nb) {
   const idx: bindex_t = compute_tree_index(nb); //   bindex_t idx;
   let v: tchunkptr = 0; //   tchunkptr v = 0;
-  let rsize: number = ((-nb) << SIZE_T_BITSIZE >>> SIZE_T_BITSIZE); //   size_t rsize = -nb; /* Unsigned negation */
+  let rsize: number = (toUnsignedInt32(-nb)); //   size_t rsize = -nb; /* Unsigned negation */
   let t: tchunkptr;  // tchunkptr t;
 
 
