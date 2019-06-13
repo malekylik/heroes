@@ -1,38 +1,34 @@
-import { Pointer, alignTo8, alignBin } from './types';
-import { MemoryChunk } from './memory-chunk';
+import { Pointer, alignTo8 } from './types';
 import { toInt32, toUnsignedInt32 } from './coercion';
 import { createArray, assert } from '../utils';
-
-const PAGE_SIZE = 4096;
 
 export class Allocator {
     memory: ArrayBuffer;
     totalSize: number;
     freeSize: number;
 
+    memoryState: mstate;
+
     programBreak: number;
-    freeChuncks: MemoryChunk[];
 
     int32View: Int32Array;
     float64View: Float64Array;
 }
 
 export function createAllocator(size: number, options?: object): Allocator {
+    size = alignTo8(size);
+
     const allocator: Allocator = new Allocator();
     const memory: ArrayBuffer = new ArrayBuffer(size);
-    // const alignedSize: number = alignTo(PAGE_SIZE, size);
     const alignedSize: number = size;
 
-    allocator.freeChuncks = new Array(1);
-    allocator.freeChuncks[0] = {
-        address: 0,
-        size
-    };
-
+    // TODO
     allocator.programBreak = 32;
 
     allocator.totalSize = alignedSize;
-    allocator.freeSize = alignedSize - 32;
+    allocator.freeSize = alignedSize;
+
+    allocator.memoryState = createMemoryState();
 
     allocator.memory = memory;
 
@@ -56,38 +52,6 @@ export function sbrk(allocator: Allocator, amount: number): Pointer {
     return -1;
 }
 
-export function allocate(allocator: Allocator, size: number): Pointer {
-    const freeMemoryChunk: MemoryChunk = getFreeMemoryAddress(allocator.freeChuncks, size);
-
-    if (freeMemoryChunk === null) return null; 
-
-    const { address, size: chunkSize } = freeMemoryChunk;
-    const addressWithAlignment: number = address < 8 ? alignBin(address) : alignTo8(address);
-
-    if ((address + chunkSize) - (addressWithAlignment + size)) {
-        const newAddress: number = addressWithAlignment + size;
-        const newSize: number = (address + chunkSize) - newAddress;
-
-        const zeroChunk: MemoryChunk = getZeroSizeMemoryChunk(allocator.freeChuncks);
-
-        if (zeroChunk) {
-            zeroChunk.address = newAddress;
-            zeroChunk.size = newSize;
-        } else {
-            allocator.freeChuncks.push({
-                address: newAddress,
-                size: newSize,
-            });
-        }
-    }
-
-    freeMemoryChunk.size = addressWithAlignment - address;
-
-    insertationSort(allocator.freeChuncks);
-
-    return addressWithAlignment;
-}
-
 export function get4Byte(a: Allocator, address: number): number {
     return a.int32View[address >> 2];
 }
@@ -104,45 +68,19 @@ export function set8Byte(a: Allocator, address: number, v: number): number {
     return a.float64View[address >> 3] = v;
 }
 
-export function getFreeMemoryAddress(chunks: MemoryChunk[], size: number): MemoryChunk | null {
-    return getFreeMemoryAddressRec(chunks, size, 0, chunks.length);
-}
-
-function getZeroSizeMemoryChunk(chunks: MemoryChunk[]): MemoryChunk | null {
-    for (let i = 0; i < chunks.length; i++) {
-        if (!chunks[i].size) return chunks[i];
-    }
-
-    return null;
-}
-
-function getFreeMemoryAddressRec(chunks: MemoryChunk[], size: number, l: number, r: number): MemoryChunk | null {
-    const median: number = toInt32((r + l) / 2);
-    const { address, size: chunkSize } = chunks[median];
-    const sizeWithAlignment: number = chunkSize - (alignTo8(address) - address);
-
-    if (r - l === 0) return sizeWithAlignment < size ? null : chunks[median];
-
-    if (size <= sizeWithAlignment) return getFreeMemoryAddressRec(chunks, size, l, median);
-    return getFreeMemoryAddressRec(chunks, size, median + 1, r);
-}
-
-function insertationSort(chunks: MemoryChunk[]): void {
-    let temp: number;
-
-    for (let i = 1; i < chunks.length; i++) {
-        for (let j = i - 1; j < i; j++) {
-            if (chunks[i].size < chunks[j].size) {
-                temp = chunks[i].size;
-                chunks[i].size = chunks[j].size;
-                chunks[j].size = temp;
-
-                temp = chunks[i].address;
-                chunks[i].address = chunks[j].address;
-                chunks[j].address = temp;
-            } else break;
-        }
-    }
+function createMemoryState(): mstate {
+  return {
+    smallmap: 0,
+    treemap: 0,
+    dvsize: 0,
+    topsize: 0,
+    least_addr: 0,
+    dv: 0,
+    top: 0,
+    smallbins: createArray<mchunkptr>((NSMALLBINS + 1) * 2, 0),
+    treebins: createArray<tbinptr>(NTREEBINS, 0),
+    mflags: 0,
+  };
 }
 
 // ----------------------dlmalloc-------------------
@@ -151,6 +89,8 @@ const USE_LOCKS: boolean = false;
 const INSECURE: boolean = false;
 const DEBUG: boolean = true;
 const FOOTERS: boolean = false;
+
+const PAGE_SIZE = 4096;
 
 const T_SIZE: number           = 4;
 const MALLOC_ALIGNMENT: number = 2 * T_SIZE;
@@ -1106,23 +1046,23 @@ function ensure_initialization(): void { // #define ensure_initialization() (voi
 //#if !ONLY_MSPACES
 
 /* The global malloc_state used for all non-"mspace" calls */
-const _gm_: mstate = { // static struct malloc_state _gm_;
-  smallmap: 0,
-  treemap: 0,
-  dvsize: 0,
-  topsize: 0,
-  least_addr: 0,
-  dv: 0,
-  top: 0,
-  smallbins: createArray<mchunkptr>((NSMALLBINS + 1) * 2, 0),
-  treebins: createArray<tbinptr>(NTREEBINS, 0),
-  mflags: 0,
-};
-const gm: mstate = _gm_; // #define gm                 (&_gm_)
+// const _gm_: mstate = { // static struct malloc_state _gm_;
+//   smallmap: 0,
+//   treemap: 0,
+//   dvsize: 0,
+//   topsize: 0,
+//   least_addr: 0,
+//   dv: 0,
+//   top: 0,
+//   smallbins: createArray<mchunkptr>((NSMALLBINS + 1) * 2, 0),
+//   treebins: createArray<tbinptr>(NTREEBINS, 0),
+//   mflags: 0,
+// };
+// const gm: mstate = _gm_; // #define gm                 (&_gm_)
 
-function is_global(M: mstate): boolean { // #define is_global(M)       ((M) == &_gm_)
-    return M === _gm_;
-}
+// function is_global(M: mstate): boolean { // #define is_global(M)       ((M) == &_gm_)
+//     return M === _gm_;
+// }
 
 // #endif /* !ONLY_MSPACES */
 
@@ -2566,6 +2506,8 @@ export function dlmalloc(a: Allocator, bytes: number): Pointer { // void* dlmall
 
     The ugly goto's here ensure that postaction occurs along all paths.
 */
+
+  const gm = a.memoryState;
 
   if (USE_LOCKS) {
       ensure_initialization(); /* initialize in sys_alloc if not using locks */
