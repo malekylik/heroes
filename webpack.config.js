@@ -64,9 +64,11 @@ module.exports = (env, argv) => {
 
   if (argv.mode === 'production') {
     config.mode = 'production';
+    config.devtool = 'none';
+    config.optimization.minimizer = [new TerserPlugin()];
   } else {
     config.mode = 'development';
-    config.devtool = 'eval';
+    config.devtool = 'eval-source-map';
   }
 
   return config;
