@@ -11,6 +11,7 @@ export class Allocator {
 
     programBreak: number;
 
+    int8View: Int8Array;
     int32View: Int32Array;
     float64View: Float64Array;
 }
@@ -32,6 +33,7 @@ export function createAllocator(size: number, options?: object): Allocator {
 
     allocator.memory = memory;
 
+    allocator.int8View = new Int8Array(memory);
     allocator.int32View = new Int32Array(memory);
     allocator.float64View = new Float64Array(memory);
 
@@ -50,6 +52,14 @@ export function sbrk(allocator: Allocator, amount: number): Pointer {
     }
 
     return -1;
+}
+
+export function get1Byte(a: Allocator, address: number): number {
+    return a.int32View[address];
+}
+
+export function set1Byte(a: Allocator, address: number, v: number): number {
+    return a.int32View[address] = v;
 }
 
 export function get4Byte(a: Allocator, address: number): number {

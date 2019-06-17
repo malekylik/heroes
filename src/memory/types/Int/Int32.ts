@@ -17,4 +17,3 @@ export function getInt32(a: Allocator, address: Int32P): number {
 export function setInt32(a: Allocator, address: Int32P, v: number): number {
     return set4Byte(a, address, toInt32(v));
 }
-
