@@ -55,11 +55,11 @@ export function sbrk(allocator: Allocator, amount: number): Pointer {
 }
 
 export function get1Byte(a: Allocator, address: number): number {
-    return a.int32View[address];
+    return a.int8View[address];
 }
 
 export function set1Byte(a: Allocator, address: number, v: number): number {
-    return a.int32View[address] = v;
+    return a.int8View[address] = v;
 }
 
 export function get4Byte(a: Allocator, address: number): number {
@@ -76,6 +76,10 @@ export function get8Byte(a: Allocator, address: number): number {
 
 export function set8Byte(a: Allocator, address: number, v: number): number {
     return a.float64View[address >> 3] = v;
+}
+
+export function getBytesCount(a: Allocator): number {
+  return a.totalSize;
 }
 
 function createMemoryState(): mstate {
