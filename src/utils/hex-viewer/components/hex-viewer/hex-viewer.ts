@@ -27,6 +27,7 @@ export default class HexViewer {
   private wrapperHeigth: number;
   private wrapperScroll: number;
   private tresholdElementCount: number = 4;
+  private startIndx: number = 0;
 
   constructor(container: HTMLElement, a: Allocator) {
     this.parent = container;
@@ -53,6 +54,7 @@ export default class HexViewer {
   render(allocator: Allocator): void {
     this.syncElementCount(this.getElementRenderCount(0));
     this.updateElementsPosition(0);
+    this.updateElementsValue(0);
     this.checkState();
 
     // const hex = numbersToHex(new Array(getBytesCount(allocator)).fill(0).map((v, i) => i), 8);
@@ -97,7 +99,13 @@ export default class HexViewer {
 
     if (scrollPosition !== this.wrapperScroll) {
       this.updateElementsPosition(scrollPosition);
-      this.updateElementsValue(scrollPosition);
+
+      const startIndx = this.getStartElementIndx(scrollPosition);
+
+      if (this.startIndx !== startIndx) {
+        this.updateElementsValue(scrollPosition);
+        this.startIndx = startIndx
+      }
 
       this.wrapperScroll = scrollPosition;
     }
@@ -110,7 +118,7 @@ export default class HexViewer {
       while (count !== (length++))
         this.container.insertAdjacentHTML(
           'beforeend',
-          `<div class='${getHexViewerCellClassName(1, 1)}'>${length}</div>`
+          `<div class='${getHexViewerCellClassName(1, 1)}'></div>`
         );
     } else if (count < length) {
       while (count !== length) this.container.removeChild(this.container.children[--length]);
@@ -209,7 +217,7 @@ export default class HexViewer {
   private updateElementsValue(scrollPosition: number): void {
     const length = this.getElementRenderCount(scrollPosition);
     const children = this.container.children;
-    let startIndx = max(0, this.getElementIndx(scrollPosition) - this.tresholdElementCount);
+    let startIndx = this.getStartElementIndx(scrollPosition);
     let i = 0;
 
     startIndx = min(startIndx, this.getTotalElementCount() - length);
