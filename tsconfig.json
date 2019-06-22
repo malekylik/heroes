@@ -1,17 +1,23 @@
 {
     "compilerOptions": {
         "outDir": "./dist",
-        "target": "ES6",
+        "target": "es2018",
         "module": "commonJS",
         "noImplicitAny": true,
         "noImplicitThis": true,
         "noImplicitReturns": true,
+        "baseUrl": "./src",
+        "paths": {
+          "memory/*": ["memory/*"],
+          "utils/*": ["utils/*"]
+        }
     },
     "include": [
         "src/**/*",
         "@types/**/*"
     ],
     "exclude": [
-        "node_modules"
+        "node_modules",
+        "dist"
     ]
 }
