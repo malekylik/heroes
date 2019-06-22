@@ -1,20 +1,21 @@
-import { createStyleTagAt } from '../../../css';
-import { Allocator, getBytesCount } from '../../../../memory/allocator';
-import { Pointer } from '../../../../memory/types';
-import { getInt32 } from '../../../../memory/types/Int/Int32';
-import { getInt8 } from '../../../../memory/types/Int/Int8';
-import { numbersToHex, min, max } from '../../../number';
-import { toInt32 } from '../../../../memory/coercion';
-
-const ELEMENT_HEIGTH: number = 28;
-
-function getHexViewerClassName(): string {
-  return 'hex-viewer';
-};
-
-function getHexViewerCellClassName(column: number, byteSize: number): string {
-  return `${getHexViewerClassName()}__cell-column-${column}-bytes-${byteSize}`;
-};
+import { Allocator, getBytesCount } from 'memory/allocator';
+import { numbersToHex, min, max } from 'utils/number';
+import { createStyleTagAt } from 'utils/css';
+import {
+  ELEMENT_HEIGTH,
+  getElementIndx,
+  getElementInContainerCount,
+} from '../../utils';
+import {
+  getWrapperClassName,
+  getScrollerClassName,
+  getHexViewerClassName,
+  getHexViewerCellClassName,
+  createScrollerStyle,
+  createWrapperStyle,
+  createContainerStyle,
+  createCellStyle,
+} from '../../utils/css';
 
 export default class HexViewer {
   private parent: HTMLElement;
@@ -24,38 +25,33 @@ export default class HexViewer {
 
   private allocator: Allocator;
 
-  private wrapperHeigth: number;
-  private wrapperScroll: number;
+  private wrapperHeigth: number = 0;
+  private wrapperScroll: number = 0;
   private tresholdElementCount: number = 4;
   private startIndx: number = 0;
 
-  constructor(container: HTMLElement, a: Allocator) {
-    this.parent = container;
+  private checkCallbackId: number = -1;
+
+  constructor(parent: HTMLElement, a: Allocator) {
+    this.parent = parent;
     this.allocator = a;
-    this.wrapper = document.createElement('div');
-    this.scroller = document.createElement('div');
 
-    this.init(container);
+    this.createElements();
 
-    const containerHeigth = container.getBoundingClientRect().height;
-    this.setWrapperHeight(containerHeigth);
-    this.setContainerHeight(containerHeigth);
-    this.setScrollerHeight(ELEMENT_HEIGTH * getBytesCount(this.allocator));
+    this.init();
+    this.initStyle(parent);
 
-    this.scroller.style.position = 'relative';
-    this.scroller.style.overflowY = 'hidden';
-    this.wrapper.style.overflowY = 'auto';
-    
-    this.scroller.appendChild(this.container);
-    this.wrapper.appendChild(this.scroller);
-    container.appendChild(this.wrapper);
+    this.insetInDOM(parent);
   }
 
-  render(allocator: Allocator): void {
-    this.syncElementCount(this.getElementRenderCount(0));
-    this.updateElementsPosition(0);
-    this.updateElementsValue(0);
-    this.checkState();
+  render(): void {
+    this.syncElementCount(this.getElementRenderCount());
+    this.updateElementsPosition(this.wrapperScroll);
+    this.updateElementsValue(this.wrapperScroll, this.getStartElementIndx(this.wrapperScroll));
+
+    if (this.checkCallbackId === -1) {
+      this.checkState();
+    }
 
     // const hex = numbersToHex(new Array(getBytesCount(allocator)).fill(0).map((v, i) => i), 8);
 
@@ -83,7 +79,7 @@ export default class HexViewer {
   }
 
   private checkState(): void {
-    requestAnimationFrame(() => this.checkState());
+    this.checkCallbackId = requestAnimationFrame(() => this.checkState());
 
     const height = this.getParentHeight();
     const scrollPosition = this.getWrapperScroll();
@@ -94,7 +90,8 @@ export default class HexViewer {
       this.setWrapperHeight(height);
       this.setContainerHeight(height);
 
-      this.syncElementCount(this.getElementRenderCount(scrollPosition));
+      this.syncElementCount(this.getElementRenderCount());
+      this.updateElementsValue(scrollPosition, this.startIndx);
     }
 
     if (scrollPosition !== this.wrapperScroll) {
@@ -103,7 +100,7 @@ export default class HexViewer {
       const startIndx = this.getStartElementIndx(scrollPosition);
 
       if (this.startIndx !== startIndx) {
-        this.updateElementsValue(scrollPosition);
+        this.updateElementsValue(scrollPosition, startIndx);
         this.startIndx = startIndx
       }
 
@@ -115,11 +112,17 @@ export default class HexViewer {
     let length = this.container.children.length;
 
     if (length < count) {
-      while (count !== (length++))
-        this.container.insertAdjacentHTML(
-          'beforeend',
-          `<div class='${getHexViewerCellClassName(1, 1)}'></div>`
-        );
+      const fragment = document.createDocumentFragment();
+
+      while (count !== (length++)) {
+        const div = document.createElement('div');
+
+        div.classList.add(getHexViewerCellClassName(1, 1));
+
+        fragment.appendChild(div);
+      }
+
+      this.container.appendChild(fragment);
     } else if (count < length) {
       while (count !== length) this.container.removeChild(this.container.children[--length]);
     }
@@ -153,22 +156,6 @@ export default class HexViewer {
     return this.wrapper.scrollTop;
   }
 
-  private init(container: HTMLElement): void {
-    createStyleTagAt(
-      container,
-      createContainerStyle(3) +
-      createCellStyle(1, 1) +
-      createCellStyle(2, 1) +
-      createCellStyle(3, 4)
-      );
-
-      this.container = document.createElement('div');
-      this.container.classList.add(getHexViewerClassName());
-
-      this.wrapperHeigth = this.getWrapperHeight();
-      this.wrapperScroll = this.getWrapperScroll();
-  }
-
   private updateElementsPosition(scrollPosition: number): void {
     const tresholdAfterPixels = (this.tresholdElementCount - 1) * ELEMENT_HEIGTH ;
     let yOffset = scrollPosition - this.getBeforePixels(scrollPosition);
@@ -182,8 +169,8 @@ export default class HexViewer {
     return getBytesCount(this.allocator);
   }
 
-  private getElementRenderCount(scrollPosition: number): number {
-    return this.tresholdElementCount + this.getElementInContainerCount() + this.tresholdElementCount;
+  private getElementRenderCount(): number {
+    return this.tresholdElementCount + getElementInContainerCount(this.getWrapperHeight()) + this.tresholdElementCount;
   }
 
   private getBeforePixels(scrollPosition: number): number {
@@ -198,36 +185,27 @@ export default class HexViewer {
     return this.getScrollerHeight() - (scrollPosition + this.getWrapperHeight());
   }
 
-  private getElementInContainerCount(): number {
-    return toInt32(this.getWrapperHeight() / ELEMENT_HEIGTH);
-  }
-
   private getStartElementIndx(scrollPosition: number): number {
-    return max(0, this.getElementIndx(scrollPosition) - this.tresholdElementCount);
-  }
-
-  private getElementIndx(scrollPosition: number): number {
-    return toInt32(scrollPosition / ELEMENT_HEIGTH);
+    return max(0, getElementIndx(scrollPosition) - this.tresholdElementCount);
   }
 
   private getEndElementIndx(scrollPosition: number): number {
-    return min(this.getStartElementIndx(scrollPosition) + this.getElementRenderCount(scrollPosition), this.getTotalElementCount());
+    return min(this.getStartElementIndx(scrollPosition) + this.getElementRenderCount(), this.getTotalElementCount());
   }
 
-  private updateElementsValue(scrollPosition: number): void {
-    const length = this.getElementRenderCount(scrollPosition);
+  private updateElementsValue(scrollPosition: number, newStartIndx: number): void {
+    const length = this.getElementRenderCount();
     const children = this.container.children;
-    let startIndx = this.getStartElementIndx(scrollPosition);
     let i = 0;
 
-    startIndx = min(startIndx, this.getTotalElementCount() - length);
-    
+    newStartIndx = min(newStartIndx, this.getTotalElementCount() - length);
+
     while (i < children.length && i < length) {
-      // children[i].innerHTML = String(this.getValue(this.allocator, 1, startIndx));
-      children[i].innerHTML = String(startIndx);
+      children[i].textContent = String(newStartIndx);
+
       i += 1;
-      startIndx += 1;
-    } 
+      newStartIndx += 1;
+    }
   }
 
   private renderList(allocator: Allocator, byteSize: number, customizeDiv: (div: HTMLDivElement, inx: number) => HTMLDivElement): DocumentFragment {
@@ -241,38 +219,42 @@ export default class HexViewer {
     return fragment;
   }
 
-  private getValue(allocator: Allocator, byteSize: number, address: Pointer): number {
-    switch(byteSize) {
-      case 1: return getInt8(allocator, address);
-      case 4: return getInt32(allocator, address);
-      default: return -1;
-    }
+  
+  private createElements(): void {
+    this.wrapper = document.createElement('div');
+    this.scroller = document.createElement('div');
+    this.container = document.createElement('div');
   }
-}
 
-function createContainerStyle(columnsCount: number): string {
-  return (
-    `
-      .${getHexViewerClassName()} {
-        position: absolute;
-        display: grid;
-        grid-template-columns: repeat(${columnsCount}, 1fr);
-        grid-auto-flow: column;
-        height: 100vh;
-      }
-    `
-  );
-}
+  private init(): void {
+      this.wrapperHeigth = this.getWrapperHeight();
+      this.wrapperScroll = this.getWrapperScroll();
+  
+      const containerHeigth = this.getParentHeight();
+      this.setWrapperHeight(containerHeigth);
+      this.setContainerHeight(containerHeigth);
+      this.setScrollerHeight(ELEMENT_HEIGTH * getBytesCount(this.allocator));
+  }
 
-function createCellStyle(columnNumber: number, byteSize: number): string {
-  return (
-    `
-      .${getHexViewerCellClassName(columnNumber, byteSize)} {
-        grid-column: ${columnNumber};
-        grid-row: auto / span ${byteSize};
-        margin: auto;
-        height: ${ELEMENT_HEIGTH}px;
-      }
-    `
-  );
+  private initStyle(parent: HTMLElement): void {
+    createStyleTagAt(
+      parent,
+      createWrapperStyle() +
+      createScrollerStyle()+
+      createContainerStyle(3) +
+      createCellStyle(1, 1) +
+      createCellStyle(2, 1) +
+      createCellStyle(3, 4)
+      );
+
+      this.wrapper.classList.add(getWrapperClassName());
+      this.scroller.classList.add(getScrollerClassName());
+      this.container.classList.add(getHexViewerClassName());
+  }
+
+  insetInDOM(parent: HTMLElement): void {
+    this.scroller.appendChild(this.container);
+    this.wrapper.appendChild(this.scroller);
+    parent.appendChild(this.wrapper);
+  }
 }
