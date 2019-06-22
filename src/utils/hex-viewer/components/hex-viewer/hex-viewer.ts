@@ -29,12 +29,15 @@ export default class HexViewer {
   private wrapperScroll: number = 0;
   private tresholdElementCount: number = 4;
   private startIndx: number = 0;
+  private startRenderIndx: number = 0;
 
   private checkCallbackId: number = -1;
 
-  constructor(parent: HTMLElement, a: Allocator) {
+  constructor(parent: HTMLElement, a: Allocator, startRenderIndx: number = 0) {
     this.parent = parent;
     this.allocator = a;
+    this.startRenderIndx = startRenderIndx;
+    this.startIndx = this.getStartElementIndx(this.wrapperScroll);
 
     this.createElements();
 
@@ -47,7 +50,7 @@ export default class HexViewer {
   render(): void {
     this.syncElementCount(this.getElementRenderCount());
     this.updateElementsPosition(this.wrapperScroll);
-    this.updateElementsValue(this.wrapperScroll, this.getStartElementIndx(this.wrapperScroll));
+    this.updateElementsValue(this.getStartElementIndx(this.wrapperScroll));
 
     if (this.checkCallbackId === -1) {
       this.checkState();
@@ -91,7 +94,7 @@ export default class HexViewer {
       this.setContainerHeight(height);
 
       this.syncElementCount(this.getElementRenderCount());
-      this.updateElementsValue(scrollPosition, this.startIndx);
+      this.updateElementsValue(this.startIndx);
     }
 
     if (scrollPosition !== this.wrapperScroll) {
@@ -100,7 +103,7 @@ export default class HexViewer {
       const startIndx = this.getStartElementIndx(scrollPosition);
 
       if (this.startIndx !== startIndx) {
-        this.updateElementsValue(scrollPosition, startIndx);
+        this.updateElementsValue(startIndx);
         this.startIndx = startIndx
       }
 
@@ -128,8 +131,32 @@ export default class HexViewer {
     }
   }
 
+  private updateElementsPosition(scrollPosition: number): void {
+    const tresholdAfterPixels = this.tresholdElementCount * ELEMENT_HEIGTH ;
+    let yOffset = scrollPosition - this.getBeforePixels(scrollPosition);
+
+    yOffset -= this.getAfterScrollHeigth(scrollPosition) < tresholdAfterPixels ? tresholdAfterPixels - this.getAfterScrollHeigth(scrollPosition) : 0;
+
+    this.container.style.transform = `translate3d(0px, ${yOffset}px, 0px)`;
+  }
+
+  private updateElementsValue(newStartIndx: number): void {
+    const length = this.getElementRenderCount();
+    const children = this.container.children;
+    let i = 0;
+
+    newStartIndx = min(newStartIndx, this.getTotalElementCount() - length);
+
+    while (i < children.length && i < length) {
+      children[i].textContent = String(newStartIndx);
+
+      i += 1;
+      newStartIndx += 1;
+    }
+  }
+
   private getParentHeight(): number {
-    return this.parent.clientHeight;
+    return min(ELEMENT_HEIGTH * this.getScrollTotalElementCount(), this.parent.clientHeight);
   }
 
   private getScrollerHeight(): number {
@@ -156,13 +183,8 @@ export default class HexViewer {
     return this.wrapper.scrollTop;
   }
 
-  private updateElementsPosition(scrollPosition: number): void {
-    const tresholdAfterPixels = (this.tresholdElementCount - 1) * ELEMENT_HEIGTH ;
-    let yOffset = scrollPosition - this.getBeforePixels(scrollPosition);
-
-    yOffset -= this.getAfterScrollHeigth(scrollPosition) < tresholdAfterPixels ? tresholdAfterPixels - this.getAfterScrollHeigth(scrollPosition) : 0;
-
-    this.container.style.transform = `translate3d(0px, ${yOffset}px, 0px)`;
+  private getScrollTotalElementCount(): number {
+    return getBytesCount(this.allocator) - this.startRenderIndx;
   }
 
   private getTotalElementCount(): number {
@@ -174,11 +196,7 @@ export default class HexViewer {
   }
 
   private getBeforePixels(scrollPosition: number): number {
-    return scrollPosition - (this.getStartElementIndx(scrollPosition) * ELEMENT_HEIGTH);
-  }
-
-  private getAfterPixels(scrollPosition: number): number {
-    return this.getEndElementIndx(scrollPosition) * ELEMENT_HEIGTH - scrollPosition - this.getWrapperHeight();
+    return scrollPosition - ((this.getStartElementIndx(scrollPosition) - this.startRenderIndx) * ELEMENT_HEIGTH);
   }
 
   private getAfterScrollHeigth(scrollPosition: number): number {
@@ -186,26 +204,7 @@ export default class HexViewer {
   }
 
   private getStartElementIndx(scrollPosition: number): number {
-    return max(0, getElementIndx(scrollPosition) - this.tresholdElementCount);
-  }
-
-  private getEndElementIndx(scrollPosition: number): number {
-    return min(this.getStartElementIndx(scrollPosition) + this.getElementRenderCount(), this.getTotalElementCount());
-  }
-
-  private updateElementsValue(scrollPosition: number, newStartIndx: number): void {
-    const length = this.getElementRenderCount();
-    const children = this.container.children;
-    let i = 0;
-
-    newStartIndx = min(newStartIndx, this.getTotalElementCount() - length);
-
-    while (i < children.length && i < length) {
-      children[i].textContent = String(newStartIndx);
-
-      i += 1;
-      newStartIndx += 1;
-    }
+    return max(0, this.startRenderIndx + getElementIndx(scrollPosition) - this.tresholdElementCount);
   }
 
   private renderList(allocator: Allocator, byteSize: number, customizeDiv: (div: HTMLDivElement, inx: number) => HTMLDivElement): DocumentFragment {
@@ -218,7 +217,6 @@ export default class HexViewer {
 
     return fragment;
   }
-
   
   private createElements(): void {
     this.wrapper = document.createElement('div');
@@ -226,14 +224,14 @@ export default class HexViewer {
     this.container = document.createElement('div');
   }
 
-  private init(): void {
-      this.wrapperHeigth = this.getWrapperHeight();
-      this.wrapperScroll = this.getWrapperScroll();
-  
+  private init(): void {  
       const containerHeigth = this.getParentHeight();
       this.setWrapperHeight(containerHeigth);
       this.setContainerHeight(containerHeigth);
-      this.setScrollerHeight(ELEMENT_HEIGTH * getBytesCount(this.allocator));
+      this.setScrollerHeight(ELEMENT_HEIGTH * this.getScrollTotalElementCount());
+
+      this.wrapperHeigth = containerHeigth;
+      this.wrapperScroll = 0;
   }
 
   private initStyle(parent: HTMLElement): void {
