@@ -21,3 +21,27 @@ export function getValue(allocator: Allocator, byteSize: number, address: Pointe
     default: return -1;
   }
 }
+
+export function getAddressOffset(length: number): number {
+  return 0;
+}
+
+export function get1ByteValueOffset(length: number): number {
+  return getAddressOffset(length) + getAddressLength(length);
+}
+
+export function get4ByteValueOffset(length: number): number {
+  return get1ByteValueOffset(length) + get1ByteValueLength(length);
+}
+
+export function getAddressLength(length: number): number {
+  return length;
+}
+
+export function get1ByteValueLength(length: number): number {
+  return length;
+}
+
+export function get4ByteValueLength(length: number): number {
+  return toInt32(length / 4);
+}

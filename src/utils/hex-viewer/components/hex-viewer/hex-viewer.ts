@@ -1,20 +1,27 @@
 import { Allocator, getBytesCount } from 'memory/allocator';
-import { numbersToHex, min, max } from 'utils/number';
+import { min, max } from 'utils/number';
 import { createStyleTagAt } from 'utils/css';
 import {
   ELEMENT_HEIGTH,
   getElementIndx,
   getElementInContainerCount,
+  get1ByteValueOffset,
+  getValue,
+  get4ByteValueOffset,
+  getAddressLength,
+  get1ByteValueLength,
+  get4ByteValueLength,
 } from '../../utils';
 import {
   getWrapperClassName,
   getScrollerClassName,
   getHexViewerClassName,
-  getHexViewerCellClassName,
   createScrollerStyle,
   createWrapperStyle,
   createContainerStyle,
   createCellStyle,
+  createContainer,
+  setCellClass,
 } from '../../utils/css';
 
 export default class HexViewer {
@@ -27,7 +34,7 @@ export default class HexViewer {
 
   private wrapperHeigth: number = 0;
   private wrapperScroll: number = 0;
-  private tresholdElementCount: number = 4;
+  private thresholdElementCount: number = 4;
   private startIndx: number = 0;
   private startRenderIndx: number = 0;
 
@@ -55,30 +62,6 @@ export default class HexViewer {
     if (this.checkCallbackId === -1) {
       this.checkState();
     }
-
-    // const hex = numbersToHex(new Array(getBytesCount(allocator)).fill(0).map((v, i) => i), 8);
-
-    // this.container.appendChild(this.renderList(allocator, 1, (div, i) => {
-    //   div.classList.add(getHexViewerCellClassName(1, 1));
-    //   div.innerText = hex[i];
-
-    //   return div;
-    // }));
-
-    // this.container.appendChild(this.renderList(allocator, 1, (div, i) => {
-    //   div.classList.add(getHexViewerCellClassName(2, 1));
-    //   div.innerText = String(this.getValue(allocator, 1, i));
-
-    //   return div;
-    // }));
-
-
-    // this.container.appendChild(this.renderList(allocator, 4, (div, i) => {
-    //   div.classList.add(getHexViewerCellClassName(3, 4));
-    //   div.innerText = String(this.getValue(allocator, 4, i));
-
-    //   return div;
-    // }));
   }
 
   private checkState(): void {
@@ -112,43 +95,75 @@ export default class HexViewer {
   }
 
   private syncElementCount(count: number): void {
+    const allCount = getAddressLength(count) + get1ByteValueLength(count) + get4ByteValueLength(count);
     let length = this.container.children.length;
 
-    if (length < count) {
+    if (length < allCount) {
       const fragment = document.createDocumentFragment();
 
-      while (count !== (length++)) {
-        const div = document.createElement('div');
-
-        div.classList.add(getHexViewerCellClassName(1, 1));
-
-        fragment.appendChild(div);
-      }
+      while ((length++) !== allCount) fragment.appendChild(createContainer(1, 1));
 
       this.container.appendChild(fragment);
-    } else if (count < length) {
-      while (count !== length) this.container.removeChild(this.container.children[--length]);
+
+      setCellClass(this.container.children, 0, getAddressLength(count), 1, 1);
+      setCellClass(this.container.children, get1ByteValueOffset(count), get4ByteValueOffset(count), 2, 1);
+      setCellClass(this.container.children, get4ByteValueOffset(count), allCount, 3, 4);
+    } else if (allCount < length) {
+      while (allCount !== length) this.container.removeChild(this.container.children[--length]);
     }
   }
 
   private updateElementsPosition(scrollPosition: number): void {
-    const tresholdAfterPixels = this.tresholdElementCount * ELEMENT_HEIGTH ;
+    const thresholdAfterPixels = this.thresholdElementCount * ELEMENT_HEIGTH ;
     let yOffset = scrollPosition - this.getBeforePixels(scrollPosition);
 
-    yOffset -= this.getAfterScrollHeigth(scrollPosition) < tresholdAfterPixels ? tresholdAfterPixels - this.getAfterScrollHeigth(scrollPosition) : 0;
+    yOffset -= this.getAfterScrollHeigth(scrollPosition) < thresholdAfterPixels ? thresholdAfterPixels - this.getAfterScrollHeigth(scrollPosition) : 0;
 
     this.container.style.transform = `translate3d(0px, ${yOffset}px, 0px)`;
   }
 
   private updateElementsValue(newStartIndx: number): void {
     const length = this.getElementRenderCount();
-    const children = this.container.children;
-    let i = 0;
 
     newStartIndx = min(newStartIndx, this.getTotalElementCount() - length);
 
-    while (i < children.length && i < length) {
+    this.updateAddressValue(newStartIndx, length);
+    this.update1ByteValue(newStartIndx, length);
+    this.update4ByteValue(newStartIndx, length);
+  }
+
+  private updateAddressValue(newStartIndx: number, length: number): void {
+    const children = this.container.children;
+    let i = 0;
+
+    while (i < length) {
       children[i].textContent = String(newStartIndx);
+
+      i += 1;
+      newStartIndx += 1;
+    }
+  }
+
+  private update1ByteValue(newStartIndx: number, length: number): void {
+    const children = this.container.children;
+    let i = get1ByteValueOffset(length);
+    length = i + get1ByteValueLength(length);
+
+    while (i < length) {
+      children[i].textContent = String(getValue(this.allocator, 1, newStartIndx));
+
+      i += 1;
+      newStartIndx += 1;
+    }
+  }
+
+  private update4ByteValue(newStartIndx: number, length: number): void {
+    const children = this.container.children;
+    let i = get4ByteValueOffset(length);
+    length = i + get4ByteValueLength(length);
+
+    while (i < length) {
+      children[i].textContent = String(getValue(this.allocator, 4, newStartIndx));
 
       i += 1;
       newStartIndx += 1;
@@ -192,7 +207,7 @@ export default class HexViewer {
   }
 
   private getElementRenderCount(): number {
-    return this.tresholdElementCount + getElementInContainerCount(this.getWrapperHeight()) + this.tresholdElementCount;
+    return this.thresholdElementCount + getElementInContainerCount(this.getWrapperHeight()) + this.thresholdElementCount;
   }
 
   private getBeforePixels(scrollPosition: number): number {
@@ -204,7 +219,7 @@ export default class HexViewer {
   }
 
   private getStartElementIndx(scrollPosition: number): number {
-    return max(0, this.startRenderIndx + getElementIndx(scrollPosition) - this.tresholdElementCount);
+    return max(0, this.startRenderIndx + getElementIndx(scrollPosition) - this.thresholdElementCount);
   }
 
   private renderList(allocator: Allocator, byteSize: number, customizeDiv: (div: HTMLDivElement, inx: number) => HTMLDivElement): DocumentFragment {

@@ -57,9 +57,35 @@ export function createCellStyle(columnNumber: number, byteSize: number): string 
       .${getHexViewerCellClassName(columnNumber, byteSize)} {
         grid-column: ${columnNumber};
         grid-row: auto / span ${byteSize};
-        margin: auto;
+        margin-left: auto;
+        margin-right: auto;
         height: ${ELEMENT_HEIGTH}px;
+        box-sizing: border-box;
+        border-top: 1px solid black;
+        width: 100%;
+        text-align: center;
       }
     `
   );
+}
+
+export function createContainer(column: number, byteSize: number): HTMLDivElement {
+  const div = document.createElement('div');
+
+  div.classList.add(getHexViewerCellClassName(column, byteSize));
+
+  return div;
+}
+
+export function setCellClass(
+    children: HTMLCollection,
+    start: number,
+    end: number,
+    columnNumber: number,
+    byteSize: number
+  ): void {
+  for (let i = start; i < end; i++) {
+    children[i].className = '';
+    children[i].classList.add(getHexViewerCellClassName(columnNumber, byteSize));
+  }
 }
