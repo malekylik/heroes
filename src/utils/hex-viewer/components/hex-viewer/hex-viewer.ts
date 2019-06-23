@@ -105,11 +105,11 @@ export default class HexViewer {
 
       this.container.appendChild(fragment);
 
-      setCellClass(this.container.children, 0, getAddressLength(count), 1, 1);
-      setCellClass(this.container.children, get1ByteValueOffset(count), get4ByteValueOffset(count), 2, 1);
-      setCellClass(this.container.children, get4ByteValueOffset(count), allCount, 3, 4);
+      this.updateCellsClass(count);
     } else if (allCount < length) {
       while (allCount !== length) this.container.removeChild(this.container.children[--length]);
+
+      this.updateCellsClass(count);
     }
   }
 
@@ -168,6 +168,14 @@ export default class HexViewer {
       i += 1;
       newStartIndx += 1;
     }
+  }
+
+  private updateCellsClass(count: number): void {
+    const children = this.container.children;
+
+    setCellClass(children, 0, getAddressLength(count), 1, 1);
+    setCellClass(children, get1ByteValueOffset(count), get4ByteValueOffset(count), 2, 1);
+    setCellClass(children, get4ByteValueOffset(count), get4ByteValueOffset(count) + get4ByteValueLength(count), 3, 4);
   }
 
   private getParentHeight(): number {
