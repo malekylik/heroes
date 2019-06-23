@@ -157,4 +157,3 @@ const mouseEventSubscription: Subscription = fromEvent(canvas.canvasHTML, 'mouse
   });
 
 start();
-

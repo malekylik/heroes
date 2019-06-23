@@ -1,1 +1,1 @@
-export { default } from './components/hex-viewer/hex-viewer';
+export { default } from './hex-viewer';

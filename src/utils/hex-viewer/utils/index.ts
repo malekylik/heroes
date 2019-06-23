@@ -10,6 +10,10 @@ export function getElementIndx(scrollPosition: number): number {
   return toInt32(scrollPosition / ELEMENT_HEIGTH);
 }
 
+export function getElementIndxWithFrac(scrollPosition: number): number {
+  return scrollPosition / ELEMENT_HEIGTH;
+}
+
 export function getElementInContainerCount(wrapperHeight: number): number {
   return toInt32(wrapperHeight / ELEMENT_HEIGTH);
 }
@@ -20,28 +24,4 @@ export function getValue(allocator: Allocator, byteSize: number, address: Pointe
     case 4: return getInt32(allocator, address);
     default: return -1;
   }
-}
-
-export function getAddressOffset(length: number): number {
-  return 0;
-}
-
-export function get1ByteValueOffset(length: number): number {
-  return getAddressOffset(length) + getAddressLength(length);
-}
-
-export function get4ByteValueOffset(length: number): number {
-  return get1ByteValueOffset(length) + get1ByteValueLength(length);
-}
-
-export function getAddressLength(length: number): number {
-  return length;
-}
-
-export function get1ByteValueLength(length: number): number {
-  return length;
-}
-
-export function get4ByteValueLength(length: number): number {
-  return toInt32(length / 4);
 }

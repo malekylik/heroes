@@ -1,4 +1,6 @@
 import { ELEMENT_HEIGTH } from './';
+import { max } from 'utils/number';
+import { alignTo8, alignTo } from 'memory/types';
 
 export function getWrapperClassName(): string {
   return 'hex-viewer-wrapper';
@@ -10,6 +12,10 @@ export function getScrollerClassName(): string {
 
 export function getHexViewerClassName(): string {
   return 'hex-viewer';
+};
+
+export function getColumnContainerClassName(postfix: string): string {
+  return `hex-viewer-column-${postfix}`;
 };
 
 export function getHexViewerCellClassName(column: number, byteSize: number): string {
@@ -37,15 +43,23 @@ export function createScrollerStyle(): string {
   );
 }
 
-export function createContainerStyle(columnsCount: number): string {
+export function createContainerStyle(): string {
   return (
     `
       .${getHexViewerClassName()} {
         position: absolute;
-        display: grid;
-        grid-template-columns: repeat(${columnsCount}, 1fr);
-        grid-auto-flow: column;
+        display: flex;
         width: 100%;
+      }
+    `
+  );
+}
+
+export function createColumnContainer(postfix: string): string {
+  return (
+    `
+      .${getColumnContainerClassName(postfix)} {
+        flex: 1;
       }
     `
   );
@@ -55,37 +69,18 @@ export function createCellStyle(columnNumber: number, byteSize: number): string 
   return (
     `
       .${getHexViewerCellClassName(columnNumber, byteSize)} {
-        grid-column: ${columnNumber};
-        grid-row: auto / span ${byteSize};
-        margin-left: auto;
-        margin-right: auto;
-        height: ${ELEMENT_HEIGTH}px;
+        height: ${byteSize * ELEMENT_HEIGTH}px;
         box-sizing: border-box;
-        border-top: 1px solid black;
-        width: 100%;
-        text-align: center;
+        border: 1px solid black;
       }
     `
   );
 }
 
-export function createContainer(column: number, byteSize: number): HTMLDivElement {
+export function createContainer(columnNumber: number, byteSize: number): HTMLDivElement {
   const div = document.createElement('div');
 
-  div.classList.add(getHexViewerCellClassName(column, byteSize));
+  div.classList.add(getHexViewerCellClassName(columnNumber, byteSize));
 
   return div;
-}
-
-export function setCellClass(
-    children: HTMLCollection,
-    start: number,
-    end: number,
-    columnNumber: number,
-    byteSize: number
-  ): void {
-  for (let i = start; i < end; i++) {
-    children[i].className = '';
-    children[i].classList.add(getHexViewerCellClassName(columnNumber, byteSize));
-  }
 }
