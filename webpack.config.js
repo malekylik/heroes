@@ -5,9 +5,6 @@ const TerserPlugin = require('terser-webpack-plugin');
 const { CheckerPlugin } = require('awesome-typescript-loader');
 
 const config = {
-  resolve: {
-    extensions: ['.ts', '.js']
-  },
   entry: {
     main: './src/index.ts',
   },
@@ -57,6 +54,14 @@ const config = {
         }
     },
     minimizer: [new TerserPlugin()],
+  },
+  resolve: {
+    alias: {
+      memory: path.resolve(__dirname, 'src/memory'),
+      utils: path.resolve(__dirname, 'src/utils'),
+      render: path.resolve(__dirname, 'src/render'),
+    },
+    extensions: ['.js', '.ts']
   }
 };
 
@@ -64,9 +69,11 @@ module.exports = (env, argv) => {
 
   if (argv.mode === 'production') {
     config.mode = 'production';
+    config.devtool = 'none';
+    config.optimization.minimizer = [new TerserPlugin()];
   } else {
     config.mode = 'development';
-    config.devtool = 'eval';
+    config.devtool = 'eval-source-map';
   }
 
   return config;

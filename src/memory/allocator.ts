@@ -1,41 +1,39 @@
-import { Pointer, alignTo8, alignBin } from './types';
-import { MemoryChunk } from './memory-chunk';
+import { Pointer, alignTo8 } from './types';
 import { toInt32, toUnsignedInt32 } from './coercion';
 import { createArray, assert } from '../utils';
-
-const PAGE_SIZE = 4096;
 
 export class Allocator {
     memory: ArrayBuffer;
     totalSize: number;
     freeSize: number;
 
-    programBreak: number;
-    freeChuncks: MemoryChunk[];
+    memoryState: mstate;
 
+    programBreak: number;
+
+    int8View: Int8Array;
     int32View: Int32Array;
     float64View: Float64Array;
 }
 
 export function createAllocator(size: number, options?: object): Allocator {
+    size = alignTo8(size);
+
     const allocator: Allocator = new Allocator();
     const memory: ArrayBuffer = new ArrayBuffer(size);
-    // const alignedSize: number = alignTo(PAGE_SIZE, size);
     const alignedSize: number = size;
 
-    allocator.freeChuncks = new Array(1);
-    allocator.freeChuncks[0] = {
-        address: 0,
-        size
-    };
-
+    // TODO
     allocator.programBreak = 32;
 
     allocator.totalSize = alignedSize;
-    allocator.freeSize = alignedSize - 32;
+    allocator.freeSize = alignedSize;
+
+    allocator.memoryState = createMemoryState();
 
     allocator.memory = memory;
 
+    allocator.int8View = new Int8Array(memory);
     allocator.int32View = new Int32Array(memory);
     allocator.float64View = new Float64Array(memory);
 
@@ -56,36 +54,12 @@ export function sbrk(allocator: Allocator, amount: number): Pointer {
     return -1;
 }
 
-export function allocate(allocator: Allocator, size: number): Pointer {
-    const freeMemoryChunk: MemoryChunk = getFreeMemoryAddress(allocator.freeChuncks, size);
+export function get1Byte(a: Allocator, address: number): number {
+    return a.int8View[address];
+}
 
-    if (freeMemoryChunk === null) return null; 
-
-    const { address, size: chunkSize } = freeMemoryChunk;
-    const addressWithAlignment: number = address < 8 ? alignBin(address) : alignTo8(address);
-
-    if ((address + chunkSize) - (addressWithAlignment + size)) {
-        const newAddress: number = addressWithAlignment + size;
-        const newSize: number = (address + chunkSize) - newAddress;
-
-        const zeroChunk: MemoryChunk = getZeroSizeMemoryChunk(allocator.freeChuncks);
-
-        if (zeroChunk) {
-            zeroChunk.address = newAddress;
-            zeroChunk.size = newSize;
-        } else {
-            allocator.freeChuncks.push({
-                address: newAddress,
-                size: newSize,
-            });
-        }
-    }
-
-    freeMemoryChunk.size = addressWithAlignment - address;
-
-    insertationSort(allocator.freeChuncks);
-
-    return addressWithAlignment;
+export function set1Byte(a: Allocator, address: number, v: number): number {
+    return a.int8View[address] = v;
 }
 
 export function get4Byte(a: Allocator, address: number): number {
@@ -104,45 +78,23 @@ export function set8Byte(a: Allocator, address: number, v: number): number {
     return a.float64View[address >> 3] = v;
 }
 
-export function getFreeMemoryAddress(chunks: MemoryChunk[], size: number): MemoryChunk | null {
-    return getFreeMemoryAddressRec(chunks, size, 0, chunks.length);
+export function getBytesCount(a: Allocator): number {
+  return a.totalSize;
 }
 
-function getZeroSizeMemoryChunk(chunks: MemoryChunk[]): MemoryChunk | null {
-    for (let i = 0; i < chunks.length; i++) {
-        if (!chunks[i].size) return chunks[i];
-    }
-
-    return null;
-}
-
-function getFreeMemoryAddressRec(chunks: MemoryChunk[], size: number, l: number, r: number): MemoryChunk | null {
-    const median: number = toInt32((r + l) / 2);
-    const { address, size: chunkSize } = chunks[median];
-    const sizeWithAlignment: number = chunkSize - (alignTo8(address) - address);
-
-    if (r - l === 0) return sizeWithAlignment < size ? null : chunks[median];
-
-    if (size <= sizeWithAlignment) return getFreeMemoryAddressRec(chunks, size, l, median);
-    return getFreeMemoryAddressRec(chunks, size, median + 1, r);
-}
-
-function insertationSort(chunks: MemoryChunk[]): void {
-    let temp: number;
-
-    for (let i = 1; i < chunks.length; i++) {
-        for (let j = i - 1; j < i; j++) {
-            if (chunks[i].size < chunks[j].size) {
-                temp = chunks[i].size;
-                chunks[i].size = chunks[j].size;
-                chunks[j].size = temp;
-
-                temp = chunks[i].address;
-                chunks[i].address = chunks[j].address;
-                chunks[j].address = temp;
-            } else break;
-        }
-    }
+function createMemoryState(): mstate {
+  return {
+    smallmap: 0,
+    treemap: 0,
+    dvsize: 0,
+    topsize: 0,
+    least_addr: 0,
+    dv: 0,
+    top: 0,
+    smallbins: createArray<mchunkptr>((NSMALLBINS + 1) * 2, 0),
+    treebins: createArray<tbinptr>(NTREEBINS, 0),
+    mflags: 0,
+  };
 }
 
 // ----------------------dlmalloc-------------------
@@ -152,9 +104,11 @@ const INSECURE: boolean = false;
 const DEBUG: boolean = true;
 const FOOTERS: boolean = false;
 
-const T_SIZE: number           = 4;
-const MALLOC_ALIGNMENT: number = 2 * T_SIZE;
-const malloc_getpagesize: number = PAGE_SIZE;
+const PAGE_SIZE = 4096;
+
+const T_SIZE: number              = 4;
+const MALLOC_ALIGNMENT: number    = 2 * T_SIZE;
+const malloc_getpagesize: number  = PAGE_SIZE;
 const DEFAULT_GRANULARITY: number = 0;
 
 function CORRUPTION_ERROR_ACTION(_: mstate): never { // #define CORRUPTION_ERROR_ACTION(m) ABORT
@@ -163,8 +117,8 @@ function CORRUPTION_ERROR_ACTION(_: mstate): never { // #define CORRUPTION_ERROR
 
 let ok_address: (M: mstate, a: Pointer) => boolean;
 let ok_next: (p: Pointer, n: Pointer) => boolean;
-// let ok_inuse;
-// let ok_pinuse;
+let ok_inuse: (a: Allocator, p: mchunkptr) => boolean;
+let ok_pinuse: (a: Allocator, p: mchunkptr) => number;
 
 if (!INSECURE) {
   /* Check if address a is at least as high as any from MORECORE or MMAP */
@@ -175,18 +129,15 @@ if (!INSECURE) {
   ok_next = function (p: Pointer, n: Pointer): boolean { // #define ok_next(p, n)    ((char*)(p) < (char*)(n))
     return p < n;
   }
-  // /* Check if p has inuse status */
-  // #define ok_inuse(p)     is_inuse(p)
-  // /* Check if p has its pinuse bit on */
-  // #define ok_pinuse(p)     pinuse(p)
+  /* Check if p has inuse status */
+  ok_inuse = is_inuse; // #define ok_inuse(p)     is_inuse(p)
+  /* Check if p has its pinuse bit on */
+  ok_pinuse = pinuse; // #define ok_pinuse(p)     pinuse(p)
 } else {
-  ok_address = function (_: mstate, __: Pointer): boolean { //   #define ok_address(M, a) (1)
-    return true;
-  }
-
+  ok_address = function (M: mstate, a: Pointer): boolean { return true; } //   #define ok_address(M, a) (1)
   ok_next = function (p: Pointer, n: Pointer): boolean { return true; } // #define ok_next(b, n)    (1)
-  // #define ok_inuse(p)      (1)
-  // #define ok_pinuse(p)     (1)
+  ok_inuse = function (a: Allocator, p: mchunkptr): boolean { return true; } // #define ok_inuse(p)      (1)
+  ok_pinuse = function (a: Allocator, p: mchunkptr): number { return 1; } // #define ok_pinuse(p)     (1)
 }
 
 // #if !FOOTERS
@@ -244,17 +195,19 @@ function set_size_and_pinuse_of_inuse_chunk(a: Allocator, _: mstate, p: mchunkpt
 
 let check_malloced_chunk: (a: Allocator, M: mstate, P: Pointer, N: number) => void;
 let check_top_chunk: (a: Allocator, M: mstate, P: Pointer) => void;
+let check_inuse_chunk: (a: Allocator, M: mstate, P: Pointer) => void;
+let check_free_chunk: (a: Allocator, M: mstate, P: Pointer) => void;
 
 if (!DEBUG) {
-  // #define check_free_chunk(M,P)
-  // #define check_inuse_chunk(M,P)
-  check_malloced_chunk = function (_, __, ___, ____): void {} // #define check_malloced_chunk(M,P,N)
+  check_free_chunk = function (a: Allocator, M: mstate, P: Pointer): void {} // #define check_free_chunk(M, P)
+  check_inuse_chunk = function (a: Allocator, M: mstate, P: Pointer): void {} // #define check_inuse_chunk(M,P)
+  check_malloced_chunk = function (a: Allocator, M: mstate, P: Pointer, N: number): void {} // #define check_malloced_chunk(M,P,N)
   // #define check_mmapped_chunk(M,P)
   // #define check_malloc_state(M)
-  check_top_chunk = function (_, __, ___): void {} // #define check_top_chunk(M,P)
+  check_top_chunk = function (a: Allocator, M: mstate, P: Pointer): void {} // #define check_top_chunk(M,P)
 } else { // #else /* DEBUG */
-  // #define check_free_chunk(M,P)       do_check_free_chunk(M,P)
-  // #define check_inuse_chunk(M,P)      do_check_inuse_chunk(M,P)
+  check_free_chunk = do_check_free_chunk; // #define check_free_chunk(M,P)       do_check_free_chunk(M,P)
+  check_inuse_chunk = do_check_inuse_chunk; // #define check_inuse_chunk(M,P)      do_check_inuse_chunk(M,P)
   check_top_chunk = do_check_top_chunk; // #define check_top_chunk(M,P)        do_check_top_chunk(M,P)
   check_malloced_chunk = do_check_malloced_chunk; // #define check_malloced_chunk(M,P,N) do_check_malloced_chunk(M,P,N)
   // #define check_mmapped_chunk(M,P)    do_check_mmapped_chunk(M,P)
@@ -312,28 +265,30 @@ function do_check_inuse_chunk(a: Allocator, m: mstate, p: mchunkptr): void { // 
   }
 }
 
-// /* Check properties of free chunks */
-// static void do_check_free_chunk(mstate m, mchunkptr p) {
-//   size_t sz = chunksize(p);
-//   mchunkptr next = chunk_plus_offset(p, sz);
-//   do_check_any_chunk(m, p);
-//   assert(!is_inuse(p));
-//   assert(!next_pinuse(p));
-//   assert (!is_mmapped(p));
-//   if (p != m->dv && p != m->top) {
-//     if (sz >= MIN_CHUNK_SIZE) {
-//       assert((sz & CHUNK_ALIGN_MASK) == 0);
-//       assert(is_aligned(chunk2mem(p)));
-//       assert(next->prev_foot == sz);
-//       assert(pinuse(p));
-//       assert (next == m->top || is_inuse(next));
-//       assert(p->fd->bk == p);
-//       assert(p->bk->fd == p);
-//     }
-//     else  /* markers are always of size SIZE_T_SIZE */
-//       assert(sz == SIZE_T_SIZE);
-//   }
-// }
+/* Check properties of free chunks */
+function do_check_free_chunk(a: Allocator, m: mstate, p: mchunkptr): void { // static void do_check_free_chunk(mstate m, mchunkptr p) {
+  const sz: number = chunksize(a, p); //   size_t sz = chunksize(p);
+  const next: mchunkptr = chunk_plus_offset(p, sz); //   mchunkptr next = chunk_plus_offset(p, sz);
+
+  do_check_any_chunk(a, m, p);
+
+  assert(!is_inuse(a, p));
+  assert(!next_pinuse(a, p));
+  assert (!is_mmapped(a, p));
+
+  if (p !== m.dv && p !== m.top) { // if (p != m->dv && p != m->top) {
+    if (sz >= MIN_CHUNK_SIZE) {
+      assert((sz & CHUNK_ALIGN_MASK) === 0);
+      assert(is_aligned(chunk2mem(p)));
+      assert(getFootValue(a, next) === sz); // assert(next->prev_foot == sz);
+      assert(Boolean(pinuse(a, p)));
+      assert (next === m.top || is_inuse(a, next)); // assert (next == m->top || is_inuse(next));
+      assert(getBackwardValue(a, getForwardValue(a, p)) === p); // assert(p->fd->bk == p);
+      assert(getForwardValue(a, getBackwardValue(a, p)) === p); // assert(p->bk->fd == p);
+    } else  /* markers are always of size SIZE_T_SIZE */
+      assert(sz === SIZE_T_SIZE);
+  }
+}
 
 /* Check properties of malloced chunks at the point they are malloced */
 function do_check_malloced_chunk(a: Allocator, m: mstate, mem: Pointer, s: number): void { // static void do_check_malloced_chunk(mstate m, void* mem, size_t s) {
@@ -558,7 +513,7 @@ function do_check_malloced_chunk(a: Allocator, m: mstate, mem: Pointer, s: numbe
 /* ------------------- size_t and alignment properties -------------------- */
 
 /* The byte and bit size of a size_t */
-const SIZE_T_SIZE: number        = T_SIZE;          // #define SIZE_T_SIZE         (sizeof(size_t))
+export const SIZE_T_SIZE: number = T_SIZE;          // #define SIZE_T_SIZE         (sizeof(size_t))
 const SIZE_T_BITSIZE: number     = (T_SIZE << 3);   // #define SIZE_T_BITSIZE      (sizeof(size_t) << 3)
 
 /* The maximum possible size_t value has all bits set */
@@ -624,7 +579,10 @@ const FLAG_BITS: number =   (PINUSE_BIT | CINUSE_BIT | FLAG4_BIT); // #define FL
 const FENCEPOST_HEAD: number = (INUSE_BITS | SIZE_T_SIZE); // #define FENCEPOST_HEAD      (INUSE_BITS|SIZE_T_SIZE)
 
 /* extraction of fields from head words */
-// #define cinuse(p)           ((p)->head & CINUSE_BIT)
+function cinuse(a: Allocator, p: mchunkptr): number { // #define cinuse(p)           ((p)->head & CINUSE_BIT)
+  return getHeadValue(a, p) & CINUSE_BIT;
+}
+
 function pinuse(a: Allocator, p: mchunkptr): number { // #define pinuse(p)           ((p)->head & PINUSE_BIT)
   return (getHeadValue(a, p) & PINUSE_BIT);
 }
@@ -641,9 +599,12 @@ function is_mmapped(a: Allocator, p: mchunkptr): boolean { // #define is_mmapped
 function chunksize(a: Allocator, p: mchunkptr): number { // ((p)->head & ~(FLAG_BITS)) // #define chunksize(p)        ((p)->head & ~(FLAG_BITS))
   return getHeadValue(a, p) & ~(FLAG_BITS);
 }
-// const clear_pinuse(p)     ((p)->head &= ~PINUSE_BIT)
-// const set_flag4(p)        ((p)->head |= FLAG4_BIT)
-// const clear_flag4(p)      ((p)->head &= ~FLAG4_BIT)
+
+function clear_pinuse(a: Allocator, p: mchunkptr): void { // #define clear_pinuse(p)     ((p)->head &= ~PINUSE_BIT)
+  setHeadValue(a, p, getHeadValue(a, p) & (~PINUSE_BIT));
+}
+// #define set_flag4(p)        ((p)->head |= FLAG4_BIT)
+// #define clear_flag4(p)      ((p)->head &= ~FLAG4_BIT)
 
 /* Treat space at ptr +/- offset as a chunk */
 function chunk_plus_offset(p: mchunkptr, s: Pointer): mchunkptr { // #define chunk_plus_offset(p, s)  ((mchunkptr)(((char*)(p)) + (s)))
@@ -682,9 +643,11 @@ function set_size_and_pinuse_of_free_chunk(a: Allocator, p: mchunkptr, s: number
 }
 
 
-// /* Set size, pinuse bit, foot, and clear next pinuse */
-// const set_free_with_pinuse(p, s, n)\
-//   (clear_pinuse(n), set_size_and_pinuse_of_free_chunk(p, s))
+/* Set size, pinuse bit, foot, and clear next pinuse */
+function set_free_with_pinuse(a: Allocator, p: mchunkptr, s: number, n: mchunkptr): void { // const set_free_with_pinuse(p, s, n)\
+  clear_pinuse(a, n); //   (clear_pinuse(n), set_size_and_pinuse_of_free_chunk(p, s))
+  set_size_and_pinuse_of_free_chunk(a, p, s);
+}
 
 // /* Get the internal overhead associated with chunk p */
 // const overhead_for(p)\
@@ -834,12 +797,12 @@ function set_size_and_pinuse_of_free_chunk(a: Allocator, p: mchunkptr, s: number
 
 */
 
-                            // typedef struct malloc_chunk  mchunk;
-type mchunkptr = Pointer;   // typedef struct malloc_chunk* mchunkptr;
-type sbinptr = Pointer;     // typedef struct malloc_chunk* sbinptr;  /* The type of bins of chunks */
-type bindex_t = number;     // typedef unsigned int bindex_t;         /* Described below */
-type binmap_t = number;     // typedef unsigned int binmap_t;         /* Described below */
-type flag_t = number;       // typedef unsigned int flag_t;           /* The type of various bit flag sets */
+                                  // typedef struct malloc_chunk  mchunk;
+export type mchunkptr = Pointer;  // typedef struct malloc_chunk* mchunkptr;
+type sbinptr = Pointer;           // typedef struct malloc_chunk* sbinptr;  /* The type of bins of chunks */
+type bindex_t = number;           // typedef unsigned int bindex_t;         /* Described below */
+type binmap_t = number;           // typedef unsigned int binmap_t;         /* Described below */
+type flag_t = number;             // typedef unsigned int flag_t;           /* The type of various bit flag sets */
 
                                             // struct malloc_chunk {
 const prevFoot: number      = SIZE_T_SIZE;  //   size_t               prev_foot;  /* Size of previous chunk (if free).  */
@@ -853,51 +816,51 @@ const headOffset: number = prevFootOffset + prevFoot;
 const fdOffset: number = headOffset + head;
 const bkOffset: number = fdOffset + fd;
 
-function getFootAddress(chunck: mchunkptr): mchunkptr {
+export function getFootAddress(chunck: mchunkptr): mchunkptr {
   return chunck + prevFootOffset;
 }
 
-function getFootValue(a: Allocator, chunck: mchunkptr): mchunkptr {
+export function getFootValue(a: Allocator, chunck: mchunkptr): mchunkptr {
   return get4Byte(a, getFootAddress(chunck));
 }
 
-function setFootValue(a: Allocator, chunck: mchunkptr, size: number): mchunkptr {
+export function setFootValue(a: Allocator, chunck: mchunkptr, size: number): mchunkptr {
   return set4Byte(a, getFootAddress(chunck), size);
 }
 
-function getHeadAddress(chunck: mchunkptr): mchunkptr {
+export function getHeadAddress(chunck: mchunkptr): mchunkptr {
   return chunck + headOffset;
 }
 
-function getHeadValue(a: Allocator, chunck: mchunkptr): mchunkptr {
+export function getHeadValue(a: Allocator, chunck: mchunkptr): mchunkptr {
   return get4Byte(a, getHeadAddress(chunck));
 }
 
-function setHeadValue(a: Allocator, chunck: mchunkptr, size: number): mchunkptr {
+export function setHeadValue(a: Allocator, chunck: mchunkptr, size: number): mchunkptr {
   return set4Byte(a, getHeadAddress(chunck), size);
 }
 
-function getForwardAddress(chunck: mchunkptr): mchunkptr {
+export function getForwardAddress(chunck: mchunkptr): mchunkptr {
   return chunck + fdOffset;
 }
 
-function getForwardValue(a: Allocator, chunck: mchunkptr): mchunkptr {
+export function getForwardValue(a: Allocator, chunck: mchunkptr): mchunkptr {
   return get4Byte(a, getForwardAddress(chunck));
 }
 
-function setForwardValue(a: Allocator, chunck: mchunkptr, fd: mchunkptr): mchunkptr {
+export function setForwardValue(a: Allocator, chunck: mchunkptr, fd: mchunkptr): mchunkptr {
   return set4Byte(a, getForwardAddress(chunck), fd);
 }
 
-function getBackwardAddress(chunck: mchunkptr): mchunkptr {
+export function getBackwardAddress(chunck: mchunkptr): mchunkptr {
   return chunck + bkOffset;
 }
 
-function getBackwardValue(a: Allocator, chunck: mchunkptr): mchunkptr {
+export function getBackwardValue(a: Allocator, chunck: mchunkptr): mchunkptr {
   return get4Byte(a, getBackwardAddress(chunck));
 }
 
-function setBackwardValue(a: Allocator, chunck: mchunkptr, bk: mchunkptr): mchunkptr {
+export function setBackwardValue(a: Allocator, chunck: mchunkptr, bk: mchunkptr): mchunkptr {
   return set4Byte(a, getBackwardAddress(chunck), bk);
 }
 
@@ -1106,23 +1069,23 @@ function ensure_initialization(): void { // #define ensure_initialization() (voi
 //#if !ONLY_MSPACES
 
 /* The global malloc_state used for all non-"mspace" calls */
-const _gm_: mstate = { // static struct malloc_state _gm_;
-  smallmap: 0,
-  treemap: 0,
-  dvsize: 0,
-  topsize: 0,
-  least_addr: 0,
-  dv: 0,
-  top: 0,
-  smallbins: createArray<mchunkptr>((NSMALLBINS + 1) * 2, 0),
-  treebins: createArray<tbinptr>(NTREEBINS, 0),
-  mflags: 0,
-};
-const gm: mstate = _gm_; // #define gm                 (&_gm_)
+// const _gm_: mstate = { // static struct malloc_state _gm_;
+//   smallmap: 0,
+//   treemap: 0,
+//   dvsize: 0,
+//   topsize: 0,
+//   least_addr: 0,
+//   dv: 0,
+//   top: 0,
+//   smallbins: createArray<mchunkptr>((NSMALLBINS + 1) * 2, 0),
+//   treebins: createArray<tbinptr>(NTREEBINS, 0),
+//   mflags: 0,
+// };
+// const gm: mstate = _gm_; // #define gm                 (&_gm_)
 
-function is_global(M: mstate): boolean { // #define is_global(M)       ((M) == &_gm_)
-    return M === _gm_;
-}
+// function is_global(M: mstate): boolean { // #define is_global(M)       ((M) == &_gm_)
+//     return M === _gm_;
+// }
 
 // #endif /* !ONLY_MSPACES */
 
@@ -1417,13 +1380,13 @@ function POSTACTION(_: mstate): void { // #define POSTACTION(M) { if (use_lock(M
 
 // #endif /* USE_LOCKS */
 
-// /*
-//   CORRUPTION_ERROR_ACTION is triggered upon detected bad addresses.
-//   USAGE_ERROR_ACTION is triggered on detected bad frees and
-//   reallocs. The argument p is an address that might have triggered the
-//   fault. It is ignored by the two predefined actions, but might be
-//   useful in custom actions that try to help diagnose errors.
-// */
+/*
+  CORRUPTION_ERROR_ACTION is triggered upon detected bad addresses.
+  USAGE_ERROR_ACTION is triggered on detected bad frees and
+  reallocs. The argument p is an address that might have triggered the
+  fault. It is ignored by the two predefined actions, but might be
+  useful in custom actions that try to help diagnose errors.
+*/
 
 // #if PROCEED_ON_ERROR
 
@@ -1443,7 +1406,9 @@ function POSTACTION(_: mstate): void { // #define POSTACTION(M) { if (use_lock(M
 // #endif /* CORRUPTION_ERROR_ACTION */
 
 // #ifndef USAGE_ERROR_ACTION
-// #define USAGE_ERROR_ACTION(m,p) ABORT
+function USAGE_ERROR_ACTION(m: mstate, p: mchunkptr): void { // #define USAGE_ERROR_ACTION(m,p) ABORT
+  assert(true);
+}
 // #endif /* USAGE_ERROR_ACTION */
 
 // #endif /* PROCEED_ON_ERROR */
@@ -1794,44 +1759,41 @@ function insert_small_chunk(a: Allocator, M: mstate, P: mchunkptr, S: number) { 
 }
 
 /* Unlink a chunk from a smallbin  */
-// #define unlink_small_chunk(M, P, S) {\
-//   mchunkptr F = P->fd;\
-//   mchunkptr B = P->bk;\
-//   bindex_t I = small_index(S);\
-//   assert(P != B);\
-//   assert(P != F);\
-//   assert(chunksize(P) == small_index2size(I));\
-//   if (RTCHECK(F == smallbin_at(M,I) || (ok_address(M, F) && F->bk == P))) { \
-//     if (B == F) {\
-//       clear_smallmap(M, I);\
-//     }\
-//     else if (RTCHECK(B == smallbin_at(M,I) ||\
-//                      (ok_address(M, B) && B->fd == P))) {\
-//       F->bk = B;\
-//       B->fd = F;\
-//     }\
-//     else {\
-//       CORRUPTION_ERROR_ACTION(M);\
-//     }\
-//   }\
-//   else {\
-//     CORRUPTION_ERROR_ACTION(M);\
-//   }\
-// }
+function unlink_small_chunk(a: Allocator, M: mstate, P: mchunkptr, S: number): void { // #define unlink_small_chunk(M, P, S) {
+  const F: mchunkptr = getForwardValue(a, P);  //   mchunkptr F = P->fd;
+  const B: mchunkptr = getBackwardValue(a, P); //   mchunkptr B = P->bk;
+  const I: bindex_t = small_index(S); //   bindex_t I = small_index(S);
+
+  assert(P !== B);
+  assert(P !== F);
+  assert(chunksize(a, P) === small_index2size(I));
+
+  if (assert(F === smallbin_at(M, I) || (ok_address(M, F) && getBackwardValue(a, F) === P))) { // if (assert(F === smallbin_at(M, I) || (ok_address(M, F) && F->bk == P))) {
+    if (B === F) {
+      clear_smallmap(M, I);
+    } else if (assert(B == smallbin_at(M,I) ||
+              (ok_address(M, B) && getForwardValue(a, B) === P))) { //  (ok_address(M, B) && B->fd == P))) {
+      setBackwardValue(a, F, B);  // F->bk = B;\
+      setForwardValue(a, B, F);  // B->fd = F;\
+    } else {
+      CORRUPTION_ERROR_ACTION(M);
+    }
+  } else {
+    CORRUPTION_ERROR_ACTION(M);
+  }
+}
 
 /* Unlink the first chunk from a smallbin */
 function unlink_first_small_chunk(a: Allocator, M: mstate, B: mchunkptr, P: mchunkptr, I: bindex_t) { // #define unlink_first_small_chunk(M, B, P, I) {\
   const F = getForwardValue(a, P); //   mchunkptr F = P->fd;\
 
-  if (DEBUG) {
-    assert(P != B);
-    assert(P != F);
-    assert(chunksize(a, P) == small_index2size(I));
-  }
+  assert(P !== B);
+  assert(P !== F);
+  assert(chunksize(a, P) === small_index2size(I));
 
-  if (B == F) {
+  if (B === F) {
     clear_smallmap(M, I);
-  } else if (assert(ok_address(M, F) &&  getBackwardValue(a, F) == P)) {
+  } else if (assert(ok_address(M, F) &&  getBackwardValue(a, F) === P)) {
     setBackwardValue(a, F, B); // F->bk = B;
     setForwardValue(a, B, F); // B->fd = F;
   } else {
@@ -1897,7 +1859,7 @@ function insert_large_chunk(a: Allocator, M: mstate, X: tchunkptr, S: number): v
         const F: tchunkptr = getForwardValue(a, T);  // tchunkptr F = T->fd;
 
         if (assert(ok_address(M, T) && ok_address(M, F))) {
-          setForwardValue(a, T, setBackwardValue(a, T, X)); // T->fd = F->bk = X;
+          setForwardValue(a, T, setBackwardValue(a, F, X)); // T->fd = F->bk = X;
           setForwardValue(a, X, F); // X->fd = F;
           setBackwardValue(a, X, T); // X->bk = T;
           setParentValue(a, X, 0); // X->parent = 0;
@@ -2023,9 +1985,13 @@ function insert_chunk(a: Allocator, M: mstate, P: mchunkptr, S: number): void { 
   }
 }
 
-// #define unlink_chunk(M, P, S)\
-//   if (is_small(S)) unlink_small_chunk(M, P, S)\
-//   else { tchunkptr TP = (tchunkptr)(P); unlink_large_chunk(M, TP); }
+function unlink_chunk(a: Allocator, M: mstate, P: mchunkptr, S: number): void { // #define unlink_chunk(M, P, S)\
+  if (is_small(S)) unlink_small_chunk(a, M, P, S);
+  else { 
+    // tchunkptr TP = (tchunkptr)(P); 
+    unlink_large_chunk(a, M, P); // unlink_large_chunk(M, TP);
+  }
+}
 
 
 // /* Relays to internal calls to malloc/free from realloc, memalign etc */
@@ -2069,7 +2035,7 @@ function init_bins (a: Allocator, m: mstate): void { // static void init_bins(ms
   let i: bindex_t;  // bindex_t i;
 
   for (i = 0; i < NSMALLBINS; ++i) {
-    const bin: sbinptr = smallbin_at(m,i); //     sbinptr bin = smallbin_at(m,i);
+    const bin: sbinptr = smallbin_at(m, i); //     sbinptr bin = smallbin_at(m,i);
     setForwardValue(a, bin, setBackwardValue(a, bin, bin));  //     bin->fd = bin->bk = bin;
   }
 }
@@ -2567,6 +2533,8 @@ export function dlmalloc(a: Allocator, bytes: number): Pointer { // void* dlmall
     The ugly goto's here ensure that postaction occurs along all paths.
 */
 
+  const gm = a.memoryState;
+
   if (USE_LOCKS) {
       ensure_initialization(); /* initialize in sys_alloc if not using locks */
   }
@@ -2708,4 +2676,142 @@ export function dlmalloc(a: Allocator, bytes: number): Pointer { // void* dlmall
   }
 
   return 0;
+}
+
+/* ---------------------------- free --------------------------- */
+
+export function dlfree(a: Allocator, mem: Pointer): void { // void dlfree(void* mem) {
+  /*
+     Consolidate freed chunks with preceeding or succeeding bordering
+     free chunks, if they exist, and then place in a bin.  Intermixed
+     with special cases for top, dv, mmapped chunks, and usage errors.
+  */
+
+  if (mem !== 0) {
+    let p: mchunkptr = mem2chunk(mem); // mchunkptr p  = mem2chunk(mem);
+// #if FOOTERS
+//     mstate fm = get_mstate_for(p);
+//     if (!ok_magic(fm)) {
+//       USAGE_ERROR_ACTION(fm, p);
+//       return;
+//     }
+// #else /* FOOTERS */
+// #define fm gm
+// #endif /* FOOTERS */
+    const fm = a.memoryState;
+
+    if (!PREACTION(fm)) {
+      check_inuse_chunk(a, fm, p);
+
+      if (assert(ok_address(fm, p) && ok_inuse(a, p))) {
+        let psize: number = chunksize(a, p); //  size_t psize = chunksize(p);
+        const next: mchunkptr = chunk_plus_offset(p, psize); // mchunkptr next = chunk_plus_offset(p, psize);
+
+        if (!pinuse(a, p)) {
+          const prevsize: number = getFootValue(a, p); // size_t prevsize = p->prev_foot;
+
+          if (is_mmapped(a, p)) {
+            psize += prevsize + MMAP_FOOT_PAD;
+            // if (CALL_MUNMAP(p - prevsize, psize) === 0) {
+               // fm->footprint -= psize;
+            // }
+
+            // goto postaction;
+            POSTACTION(fm);
+          } else {
+            const prev: mchunkptr = chunk_minus_offset(p, prevsize); // mchunkptr prev = chunk_minus_offset(p, prevsize);
+            
+            psize += prevsize;
+
+            p = prev;
+
+            if (assert(ok_address(fm, prev))) { /* consolidate backward */
+              if (p !== fm.dv) { // if (p != fm->dv) {
+                unlink_chunk(a, fm, p, prevsize);
+              } else if ((getHeadValue(a, next) & INUSE_BITS) === INUSE_BITS) { //  } else if ((next->head & INUSE_BITS) == INUSE_BITS) {
+                fm.dvsize = psize;
+
+                set_free_with_pinuse(a, p, psize, next);
+
+                // goto postaction;
+                POSTACTION(fm);
+              }
+            } else {
+              // goto erroraction;
+              USAGE_ERROR_ACTION(fm, p);
+            }
+          }
+        }
+
+        if (assert(ok_next(p, next) && Boolean(ok_pinuse(a, next)))) {
+          if (!cinuse(a, next)) {  /* consolidate forward */
+            if (next === fm.top) {
+              const tsize: number = fm.topsize += psize; // size_t tsize = fm->topsize += psize;
+              fm.top = p;
+
+              setHeadValue(a, p, tsize | PINUSE_BIT); // p->head = tsize | PINUSE_BIT;
+
+              if (p === fm.dv) {
+                fm.dv = 0;
+                fm.dvsize = 0;
+              }
+
+              // if (should_trim(fm, tsize))
+              //   sys_trim(fm, 0);
+
+              // goto postaction;
+              POSTACTION(fm);
+            } else if (next === fm.dv) {
+              const dsize: number = fm.dvsize += psize; // size_t dsize = fm->dvsize += psize;
+              fm.dv = p;
+
+              set_size_and_pinuse_of_free_chunk(a, p, dsize);
+
+              // goto postaction;
+              POSTACTION(fm);
+            } else {
+              const nsize: number = chunksize(a, next); // size_t nsize = chunksize(next);
+              psize += nsize;
+
+              unlink_chunk(a, fm, next, nsize);
+
+              set_size_and_pinuse_of_free_chunk(a, p, psize);
+
+              if (p === fm.dv) {
+                fm.dvsize = psize;
+
+                // goto postaction;
+                POSTACTION(fm);
+              }
+            }
+          } else
+            set_free_with_pinuse(a, p, psize, next);
+
+          if (is_small(psize)) {
+            insert_small_chunk(a, fm, p, psize);
+            check_free_chunk(a, fm, p);
+          } else {
+            const tp: tchunkptr = p; // tchunkptr tp = (tchunkptr)p;
+
+            insert_large_chunk(a, fm, tp, psize);
+            check_free_chunk(a, fm, p);
+
+            // if (--fm.release_checks == 0)
+            //   release_unused_segments(fm);
+          }
+
+          // goto postaction;
+          POSTACTION(fm);
+        }
+      }
+    // erroraction:
+    //   USAGE_ERROR_ACTION(fm, p);
+
+    // postaction:
+    //   POSTACTION(fm);
+    }
+  }
+// #if !FOOTERS
+// #undef fm
+// #endif /* FOOTERS */
 }
