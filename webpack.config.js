@@ -32,14 +32,25 @@ const config = {
       verbose: false,
       exclude: ['src'],
     }),
-    new CheckerPlugin()
+    new CheckerPlugin(),
+
   ],
   module: {
     rules: [
       {
+        test: /\.cpp.ts?$/,
+        use: [
+          'awesome-typescript-loader',
+          {
+            loader: 'preprocessor-js-loader',
+            options: { path: 'cl', option: 'EP' }
+          },
+        ],
+      },
+      {
         test: /\.ts?$/,
-        loader: 'awesome-typescript-loader'
-      }
+        use: 'awesome-typescript-loader',
+      },
     ]
   },
   optimization: {
@@ -62,6 +73,11 @@ const config = {
       render: path.resolve(__dirname, 'src/render'),
     },
     extensions: ['.js', '.ts']
+  },
+  resolveLoader: {
+    modules: ['node_modules', path.resolve(__dirname, 'src', 'loaders')],
+    extensions: ['.js', '.json'],
+    mainFields: ['loader', 'main']
   }
 };
 
