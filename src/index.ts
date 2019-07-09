@@ -8,6 +8,8 @@ import { Canvas } from './render/canvas/canvas';
 import { Camera } from './render/camera/camera';
 import { Camera3D } from './render/camera/camera3d';
 
+import { abc } from './jsWithC.cpp';
+
 const canvas: Canvas = Canvas.getCanvas();
 const gl: WebGL2RenderingContext = canvas.gl;
 const width: number = window.innerWidth;
@@ -156,4 +158,6 @@ const mouseEventSubscription: Subscription = fromEvent(canvas.canvasHTML, 'mouse
     camera.updateMouse(ev);
   });
 
-start();
+// start();
+
+console.log(abc());
