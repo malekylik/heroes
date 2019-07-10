@@ -4,6 +4,8 @@ const CleanWebpackPlugin = require('clean-webpack-plugin');
 const TerserPlugin = require('terser-webpack-plugin');
 const { CheckerPlugin } = require('awesome-typescript-loader');
 
+const options = require('./config.json');
+
 const config = {
   entry: {
     main: './src/index.ts',
@@ -43,7 +45,7 @@ const config = {
           'awesome-typescript-loader',
           {
             loader: 'preprocessor-js-loader',
-            options: { path: 'cl', option: 'EP' }
+            options: { path: options.CCompiler.path , option: options.CCompiler.preprocessorFlag }
           },
         ],
       },

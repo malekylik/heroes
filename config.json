@@ -1,0 +1,6 @@
+{
+    "CCompiler": {
+        "path": "cl",
+        "preprocessorFlag": "EP"
+    }
+}
