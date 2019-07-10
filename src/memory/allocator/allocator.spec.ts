@@ -3,6 +3,8 @@ import { expect } from 'chai';
 import {
   Allocator,
   createAllocator,
+} from './allocator';
+import {
   mchunkptr,
   SIZE_T_SIZE,
   getFootAddress,
@@ -17,8 +19,7 @@ import {
   getHeadValue,
   getForwardValue,
   getBackwardValue,
-} from './allocator';
-
+} from './dlmalloc.cpp';
 
 describe('Allocator', () => {
   let a: Allocator;

@@ -1,5 +1,5 @@
 import { Primitive, Pointer } from '../type';
-import { Allocator, get1Byte, set1Byte } from '../../allocator';
+import { Allocator, get1Byte, set1Byte } from 'memory/allocator/allocator';
 import { toInt32 } from '../../coercion';
 
 export type Int8P = Pointer;

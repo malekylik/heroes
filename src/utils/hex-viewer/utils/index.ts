@@ -1,7 +1,7 @@
 import { toInt32 } from 'memory/coercion';
 import { getInt8 } from 'memory/types/Int/Int8';
 import { getInt32 } from 'memory/types/Int/Int32';
-import { Allocator } from 'memory/allocator';
+import { Allocator } from 'memory/allocator/allocator';
 import { Pointer } from 'memory/types';
 
 export const ELEMENT_HEIGTH: number = 28;

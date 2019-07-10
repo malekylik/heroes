@@ -1,4 +1,4 @@
-import { Allocator, getBytesCount } from 'memory/allocator';
+import { Allocator, getBytesCount } from 'memory/allocator/allocator';
 import { min } from 'utils/number';
 import { createStyleTagAt } from 'utils/css';
 import {

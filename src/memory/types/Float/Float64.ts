@@ -1,5 +1,5 @@
 import { Pointer, Primitive } from '..';
-import { Allocator, get8Byte, set8Byte } from '../../allocator';
+import { Allocator, get8Byte, set8Byte } from 'memory/allocator/allocator';
 
 export type Float64P = Pointer;
 export const FLOAT64_SIZE: number = 8;

@@ -1,6 +1,4 @@
 import { ELEMENT_HEIGTH } from './';
-import { max } from 'utils/number';
-import { alignTo8, alignTo } from 'memory/types';
 
 export function getWrapperClassName(): string {
   return 'hex-viewer-wrapper';
