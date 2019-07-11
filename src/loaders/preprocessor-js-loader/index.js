@@ -9,8 +9,8 @@ const schema = {
     path: {
       type: 'string'
     },
-    option: {
-      type: 'string'
+    compilerOptions: {
+      type: 'array'
     },
   }
 };
@@ -21,9 +21,11 @@ module.exports = function (source) {
 
   validateOptions(schema, options, 'preprocessor-js-loader');
 
-  const { path, option } = options;
+  const { path, compilerOptions } = options;
 
-  exec(`${path} -${option} ${this.resourcePath}`, (error, stdout, stderr) => {
+  const optionsStr = compilerOptions.map(option => `-${option}`).join(' ');
+
+  exec(`${path} ${optionsStr} ${this.resourcePath}`, (error, stdout, stderr) => {
     if (error) {
       console.error(error);
       return callback(error);

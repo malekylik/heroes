@@ -1,6 +1,6 @@
 {
     "CCompiler": {
-        "path": "cl",
-        "preprocessorFlag": "EP"
+        "path": "clang-cpp",
+        "preprocessorFlag": ["E", "P"]
     }
 }
