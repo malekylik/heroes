@@ -45,7 +45,7 @@ const config = {
           'awesome-typescript-loader',
           {
             loader: 'preprocessor-js-loader',
-            options: { path: options.CCompiler.path , option: options.CCompiler.preprocessorFlag }
+            options: { path: options.CCompiler.path , compilerOptions: options.CCompiler.preprocessorFlag }
           },
         ],
       },
