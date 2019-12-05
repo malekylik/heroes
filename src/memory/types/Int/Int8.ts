@@ -1,6 +1,5 @@
 import { Primitive, Pointer } from '../type';
-import { Allocator, get1Byte, set1Byte } from 'memory/allocator/allocator';
-import { toInt32 } from '../../coercion';
+import { Allocator } from 'memory/allocator/allocator';
 
 export type Int8P = Pointer;
 export const INT8_SIZE: number = 1;
@@ -11,9 +10,9 @@ Int8.toString = function toString(): string {
 }
 
 export function getInt8(a: Allocator, address: Int8P): number {
-    return get1Byte(a, address);
+    return a.int8View[address];
 }
 
 export function setInt8(a: Allocator, address: Int8P, v: number): number {
-    return set1Byte(a, address, toInt32(v));
+    return a.int8View[address] = v;
 }

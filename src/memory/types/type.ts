@@ -43,19 +43,30 @@ export function alignTo(size: number, value: number): number {
     return size + ((value - size % value) % value);
 }
 
+export function alignTo2(size: number): number {
+    return alignTo(size, 2);
+}
+
+export function alignTo4(size: number): number {
+    return alignTo(size, 4);
+}
+
 export function alignTo8(size: number): number {
     return alignTo(size, 8);
 }
 
-export function alignBin(size: number): number {
-    return alignRec(size, 0, binPowers.length - 1);
+export function align32Bit(size: number): number {
+    if (size < 3) return size;
+
+    return alignTo4(size);
 }
 
-function alignRec(size: number, l: number, r: number): number {
-    if (r - l === 0) return binPowers[l];
+export function align64Bit(size: number): number {
+    return size < 5 ? align32Bit(size) : alignTo8(size);
+}
 
-    const median: number = toInt32((r + l) / 2);
+export const align: (size: number) => number = align32Bit;
 
-    if (size <= binPowers[median]) return alignRec(size, l, median);
-    return alignRec(size, median + 1, r);
+export function padTo(size: number, value: number): number {
+    return (-size & (value - 1));
 }

@@ -1,163 +1,194 @@
-import * as glm from 'glm-js';
-import * as OBJ from 'webgl-obj-loader';
+import { defineStruct } from "memory/types/struct/struct";
+import { Int8 } from "memory/types/Int/Int8";
+import { Float64 } from "memory/types/Float/Float64";
+import { structToString } from "memory/types/struct/string-utils";
+import { sizeof, align, padTo, defineArray } from "memory/types";
+import { Float32 } from "memory/types/Float/Float32";
+import { Size_t } from "memory/types/Int/Size_t";
 
-import { fromEvent, Subscription } from 'rxjs';
-import { map } from 'rxjs/operators';
+// import * as glm from 'glm-js';
+// import * as OBJ from 'webgl-obj-loader';
 
-import { Canvas } from './render/canvas/canvas';
-import { Camera } from './render/camera/camera';
-import { Camera3D } from './render/camera/camera3d';
+// import { fromEvent, Subscription } from 'rxjs';
+// import { map } from 'rxjs/operators';
 
-import { abc } from './jsWithC.cpp';
+// import { Canvas } from './render/canvas/canvas';
+// import { Camera } from './render/camera/camera';
+// import { Camera3D } from './render/camera/camera3d';
 
-const canvas: Canvas = Canvas.getCanvas();
-const gl: WebGL2RenderingContext = canvas.gl;
-const width: number = window.innerWidth;
-const height: number = window.innerHeight;
-const bgColor: glm.vec4 = glm.vec4(0.0, 0.5, 0.0, 1.0);
-const perspective: glm.mat4 = glm.perspective(glm.radians(60), width / height, 1, 1000);
-const translate: glm.mat4 = glm.translate(glm.vec3(0, 0, 0));
-const path: string = './src/IronMan.obj';
+// import { abc } from './jsWithC.cpp';
 
-const A_POSITION: string = 'a_Position';
-const PERSPECTIVE: string = 'perspective';
-const TRANSLATE: string = 'translate';
-const ROTATION: string = 'rotation';
-const VIEW: string = 'view';
+// const canvas: Canvas = Canvas.getCanvas();
+// const gl: WebGL2RenderingContext = canvas.gl;
+// const width: number = window.innerWidth;
+// const height: number = window.innerHeight;
+// const bgColor: glm.vec4 = glm.vec4(0.0, 0.5, 0.0, 1.0);
+// const perspective: glm.mat4 = glm.perspective(glm.radians(60), width / height, 1, 1000);
+// const translate: glm.mat4 = glm.translate(glm.vec3(0, 0, 0));
+// const path: string = './src/IronMan.obj';
 
-let rotation: glm.mat4 = glm.toMat4(glm.angleAxis(glm.radians(45), glm.vec3(0, 1, 1)));
-let verticesCoord: Float32Array;
-let obj: OBJ.Mesh;
+// const A_POSITION: string = 'a_Position';
+// const PERSPECTIVE: string = 'perspective';
+// const TRANSLATE: string = 'translate';
+// const ROTATION: string = 'rotation';
+// const VIEW: string = 'view';
 
-const VSHADER_SOURCE: string =
-  `uniform mat4 ${TRANSLATE}; \n
-  uniform mat4 ${ROTATION}; \n
-  uniform mat4 ${PERSPECTIVE}; \n
-  uniform mat4 ${VIEW}; \n
-  attribute vec4 ${A_POSITION};\n
-  void main() {\n
-   gl_Position = ${PERSPECTIVE} * ${VIEW} * ${TRANSLATE} * ${ROTATION} * ${A_POSITION};\n
-  }\n`;
-const FSHADER_SOURCE: string =
-  `void main() {\n
-   gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);\n
-  }\n`;
+// let rotation: glm.mat4 = glm.toMat4(glm.angleAxis(glm.radians(45), glm.vec3(0, 1, 1)));
+// let verticesCoord: Float32Array;
+// let obj: OBJ.Mesh;
 
-const program: WebGLProgram = createProgram(VSHADER_SOURCE, FSHADER_SOURCE);
-gl.useProgram(program);
+// const VSHADER_SOURCE: string =
+//   `uniform mat4 ${TRANSLATE}; \n
+//   uniform mat4 ${ROTATION}; \n
+//   uniform mat4 ${PERSPECTIVE}; \n
+//   uniform mat4 ${VIEW}; \n
+//   attribute vec4 ${A_POSITION};\n
+//   void main() {\n
+//    gl_Position = ${PERSPECTIVE} * ${VIEW} * ${TRANSLATE} * ${ROTATION} * ${A_POSITION};\n
+//   }\n`;
+// const FSHADER_SOURCE: string =
+//   `void main() {\n
+//    gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);\n
+//   }\n`;
 
-const a_Position: number = gl.getAttribLocation(program, A_POSITION);
-const perspectiveUniformLocation: WebGLUniformLocation =
-  gl.getUniformLocation(program, PERSPECTIVE);
-const translateUniformLocation: WebGLUniformLocation = gl.getUniformLocation(program, TRANSLATE);
-const rotationUniformLocation: WebGLUniformLocation = gl.getUniformLocation(program, ROTATION);
-const viewUniformLocation: WebGLUniformLocation = gl.getUniformLocation(program, VIEW);
+// const program: WebGLProgram = createProgram(VSHADER_SOURCE, FSHADER_SOURCE);
+// gl.useProgram(program);
 
-function loadShader(type: number, source: string): WebGLShader {
-  const shader: WebGLShader = gl.createShader(type);
+// const a_Position: number = gl.getAttribLocation(program, A_POSITION);
+// const perspectiveUniformLocation: WebGLUniformLocation =
+//   gl.getUniformLocation(program, PERSPECTIVE);
+// const translateUniformLocation: WebGLUniformLocation = gl.getUniformLocation(program, TRANSLATE);
+// const rotationUniformLocation: WebGLUniformLocation = gl.getUniformLocation(program, ROTATION);
+// const viewUniformLocation: WebGLUniformLocation = gl.getUniformLocation(program, VIEW);
 
-  gl.shaderSource(shader, source);
-  gl.compileShader(shader);
+// function loadShader(type: number, source: string): WebGLShader {
+//   const shader: WebGLShader = gl.createShader(type);
 
-  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-    const error: string = gl.getShaderInfoLog(shader);
-    throw new Error(`invalid compile status shader: ${error}`);
-  }
+//   gl.shaderSource(shader, source);
+//   gl.compileShader(shader);
 
-  return shader;
-}
+//   if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+//     const error: string = gl.getShaderInfoLog(shader);
+//     throw new Error(`invalid compile status shader: ${error}`);
+//   }
 
-function createProgram(vShader: string, fShader: string): WebGLProgram {
-  const vertexShader: WebGLShader = loadShader(gl.VERTEX_SHADER, vShader);
-  const fragmentShader: WebGLShader = loadShader(gl.FRAGMENT_SHADER, fShader);
-  const program: WebGLProgram = gl.createProgram();
+//   return shader;
+// }
 
-  gl.attachShader(program, vertexShader);
-  gl.attachShader(program, fragmentShader);
-  gl.linkProgram(program);
+// function createProgram(vShader: string, fShader: string): WebGLProgram {
+//   const vertexShader: WebGLShader = loadShader(gl.VERTEX_SHADER, vShader);
+//   const fragmentShader: WebGLShader = loadShader(gl.FRAGMENT_SHADER, fShader);
+//   const program: WebGLProgram = gl.createProgram();
 
-  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-    const error: string = gl.getProgramInfoLog(program);
-    throw new Error(`not the last link operation was successful: ${error}`);
-  }
+//   gl.attachShader(program, vertexShader);
+//   gl.attachShader(program, fragmentShader);
+//   gl.linkProgram(program);
 
-  return program;
-}
+//   if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+//     const error: string = gl.getProgramInfoLog(program);
+//     throw new Error(`not the last link operation was successful: ${error}`);
+//   }
 
-function render(time: number): void {
-  rotation = glm.toMat4(glm.angleAxis(glm.radians(time / 20), glm.vec3(0, 1, 0)));
-  camera.update();
-  gl.uniformMatrix4fv(rotationUniformLocation, false, rotation.elements);
-  gl.uniformMatrix4fv(viewUniformLocation, false, camera.view.elements);
+//   return program;
+// }
 
-  canvas.clear();
+// function render(time: number): void {
+//   rotation = glm.toMat4(glm.angleAxis(glm.radians(time / 20), glm.vec3(0, 1, 0)));
+//   camera.update();
+//   gl.uniformMatrix4fv(rotationUniformLocation, false, rotation.elements);
+//   gl.uniformMatrix4fv(viewUniformLocation, false, camera.view.elements);
 
-  gl.drawElements(gl.TRIANGLES, obj.indices.length, gl.UNSIGNED_INT, 0);
-}
+//   canvas.clear();
 
-function main(time: number) {
-  render(time);
-  requestAnimationFrame(main);
-}
+//   gl.drawElements(gl.TRIANGLES, obj.indices.length, gl.UNSIGNED_INT, 0);
+// }
 
-async function start(): Promise<void> {
-  const response: Response = await fetch(path);
-  const stringObj: string = await response.text();
+// function main(time: number) {
+//   render(time);
+//   requestAnimationFrame(main);
+// }
 
-  obj = new OBJ.Mesh(stringObj);
+// async function start(): Promise<void> {
+//   const response: Response = await fetch(path);
+//   const stringObj: string = await response.text();
 
-  const vertexBuffer: WebGLBuffer = gl.createBuffer();
-  const indicesBuffer: WebGLBuffer = gl.createBuffer();
+//   obj = new OBJ.Mesh(stringObj);
 
-  verticesCoord = new Float32Array(obj.vertices);
+//   const vertexBuffer: WebGLBuffer = gl.createBuffer();
+//   const indicesBuffer: WebGLBuffer = gl.createBuffer();
 
-  gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
-  gl.bufferData(gl.ARRAY_BUFFER, verticesCoord, gl.STATIC_DRAW);
-  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indicesBuffer);
-  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint32Array(obj.indices), gl.STATIC_DRAW);
-  gl.vertexAttribPointer(a_Position, 3, gl.FLOAT, false, 0, 0);
-  gl.enableVertexAttribArray(a_Position);
+//   verticesCoord = new Float32Array(obj.vertices);
 
-  requestAnimationFrame(main);
-}
+//   gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+//   gl.bufferData(gl.ARRAY_BUFFER, verticesCoord, gl.STATIC_DRAW);
+//   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indicesBuffer);
+//   gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint32Array(obj.indices), gl.STATIC_DRAW);
+//   gl.vertexAttribPointer(a_Position, 3, gl.FLOAT, false, 0, 0);
+//   gl.enableVertexAttribArray(a_Position);
 
-document.body.appendChild(canvas.canvasHTML);
-canvas.setColor(bgColor);
-canvas.enableDepthTest();
-canvas.setSize(width, height);
-canvas.canvasHTML.setAttribute('tabindex', '0');
+//   requestAnimationFrame(main);
+// }
 
-const camera: Camera = new Camera3D();
+// document.body.appendChild(canvas.canvasHTML);
+// canvas.setColor(bgColor);
+// canvas.enableDepthTest();
+// canvas.setSize(width, height);
+// canvas.canvasHTML.setAttribute('tabindex', '0');
 
-gl.uniformMatrix4fv(perspectiveUniformLocation, false, perspective.elements);
-gl.uniformMatrix4fv(translateUniformLocation, false, translate.elements);
-gl.uniformMatrix4fv(rotationUniformLocation, false, rotation.elements);
-gl.uniformMatrix4fv(viewUniformLocation, false, camera.view.elements);
+// const camera: Camera = new Camera3D();
 
-const keyboardEventSubscription: Subscription = fromEvent(canvas.canvasHTML, 'keyup')
-  .pipe(
-    map((ev: KeyboardEvent) => ev),
-  )
-  .subscribe((ev: KeyboardEvent) => {
-    camera.updateKeyboard(ev);
-  });
+// gl.uniformMatrix4fv(perspectiveUniformLocation, false, perspective.elements);
+// gl.uniformMatrix4fv(translateUniformLocation, false, translate.elements);
+// gl.uniformMatrix4fv(rotationUniformLocation, false, rotation.elements);
+// gl.uniformMatrix4fv(viewUniformLocation, false, camera.view.elements);
 
-const keyboardEventSubscription2: Subscription = fromEvent(canvas.canvasHTML, 'keydown')
-  .pipe(
-    map((ev: KeyboardEvent) => ev),
-  )
-  .subscribe((ev: KeyboardEvent) => {
-    camera.updateKeyboard(ev);
-  });
+// const keyboardEventSubscription: Subscription = fromEvent(canvas.canvasHTML, 'keyup')
+//   .pipe(
+//     map((ev: KeyboardEvent) => ev),
+//   )
+//   .subscribe((ev: KeyboardEvent) => {
+//     camera.updateKeyboard(ev);
+//   });
 
-const mouseEventSubscription: Subscription = fromEvent(canvas.canvasHTML, 'mousemove')
-  .pipe(
-    map((ev: MouseEvent) => ev),
-  )
-  .subscribe((ev: MouseEvent) => {
-    camera.updateMouse(ev);
-  });
+// const keyboardEventSubscription2: Subscription = fromEvent(canvas.canvasHTML, 'keydown')
+//   .pipe(
+//     map((ev: KeyboardEvent) => ev),
+//   )
+//   .subscribe((ev: KeyboardEvent) => {
+//     camera.updateKeyboard(ev);
+//   });
 
-// start();
+// const mouseEventSubscription: Subscription = fromEvent(canvas.canvasHTML, 'mousemove')
+//   .pipe(
+//     map((ev: MouseEvent) => ev),
+//   )
+//   .subscribe((ev: MouseEvent) => {
+//     camera.updateMouse(ev);
+//   });
 
-console.log(abc());
+// // start();
+
+// console.log(abc());
+
+// struct malloc_chunk {
+//   size_t               prev_foot;  /* Size of previous chunk (if free).  */
+//   size_t               head;       /* Size and inuse bits. */
+//   struct malloc_chunk* fd;         /* double links -- used only if free. */
+//   struct malloc_chunk* bk;
+// };
+
+const malloc_chunkP = Size_t;
+
+const str = defineStruct({
+  prev_foot: Size_t,
+  head: Size_t,
+  fd: malloc_chunkP,
+  bk: malloc_chunkP,
+});
+
+console.log(structToString(str));
+console.log(sizeof(str));
+console.log(str.get.prev_foot(3));
+console.log(str.get.head(3));
+console.log(str.get.fd(3));
+console.log(str.get.bk(3));

@@ -1,6 +1,5 @@
 import { Primitive, Pointer } from '../type';
-import { Allocator, get4Byte, set4Byte } from 'memory/allocator/allocator';
-import { toInt32 } from '../../coercion';
+import { Allocator } from 'memory/allocator/allocator';
 
 export type Int32P = Pointer;
 export const INT32_SIZE: number = 4;
@@ -11,9 +10,9 @@ Int32.toString = function toString(): string {
 }
 
 export function getInt32(a: Allocator, address: Int32P): number {
-    return get4Byte(a, address);
+    return a.int32View[address >> 2];
 }
 
 export function setInt32(a: Allocator, address: Int32P, v: number): number {
-    return set4Byte(a, address, toInt32(v));
+    return a.int32View[address >> 2] = v;
 }

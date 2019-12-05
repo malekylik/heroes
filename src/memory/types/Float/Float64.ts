@@ -1,5 +1,5 @@
 import { Pointer, Primitive } from '..';
-import { Allocator, get8Byte, set8Byte } from 'memory/allocator/allocator';
+import { Allocator } from 'memory/allocator/allocator';
 
 export type Float64P = Pointer;
 export const FLOAT64_SIZE: number = 8;
@@ -10,9 +10,9 @@ Float64.toString = function toString(): string {
 }
 
 export function getFloat64(a: Allocator, address: Float64P): number {
-    return get8Byte(a, address);
+    return a.float64View[address >> 3];
 }
 
 export function setFloat64(a: Allocator, address: Float64P, v: number): number {
-    return set8Byte(a, address, v);
+    return a.float64View[address >> 3] = v;
 }

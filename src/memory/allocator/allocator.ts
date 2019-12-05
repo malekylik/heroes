@@ -12,6 +12,8 @@ export class Allocator {
 
     int8View: Int8Array;
     int32View: Int32Array;
+    uint32View: Uint32Array;
+    float32View: Float32Array;
     float64View: Float64Array;
 }
 
@@ -34,6 +36,7 @@ export function createAllocator(size: number, options?: object): Allocator {
 
     allocator.int8View = new Int8Array(memory);
     allocator.int32View = new Int32Array(memory);
+    allocator.float32View = new Float32Array(memory);
     allocator.float64View = new Float64Array(memory);
 
     return allocator;
@@ -53,29 +56,29 @@ export function sbrk(allocator: Allocator, amount: number): Pointer {
     return -1;
 }
 
-export function get1Byte(a: Allocator, address: number): number {
-    return a.int8View[address];
-}
+// export function get1Byte(a: Allocator, address: number): number {
+//     return a.int8View[address];
+// }
 
-export function set1Byte(a: Allocator, address: number, v: number): number {
-    return a.int8View[address] = v;
-}
+// export function set1Byte(a: Allocator, address: number, v: number): number {
+//     return a.int8View[address] = v;
+// }
 
-export function get4Byte(a: Allocator, address: number): number {
-    return a.int32View[address >> 2];
-}
+// export function get4Byte(a: Allocator, address: number): number {
+//     return a.int32View[address >> 2];
+// }
 
-export function set4Byte(a: Allocator, address: number, v: number): number {
-    return a.int32View[address >> 2] = v;
-}
+// export function set4Byte(a: Allocator, address: number, v: number): number {
+//     return a.int32View[address >> 2] = v;
+// }
 
-export function get8Byte(a: Allocator, address: number): number {
-    return a.float64View[address >> 3];
-}
+// export function get8Byte(a: Allocator, address: number): number {
+//     return a.float64View[address >> 3];
+// }
 
-export function set8Byte(a: Allocator, address: number, v: number): number {
-    return a.float64View[address >> 3] = v;
-}
+// export function set8Byte(a: Allocator, address: number, v: number): number {
+//     return a.float64View[address >> 3] = v;
+// }
 
 export function getBytesCount(a: Allocator): number {
   return a.totalSize;

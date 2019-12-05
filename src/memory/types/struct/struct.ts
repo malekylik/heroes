@@ -1,5 +1,5 @@
 import { Type, sizeof } from '../';
-import { alignBin, alignTo8 } from '../type';
+import { align, padTo } from '../type';
 import { StructGetters, StructMeta, StructP, FullPropertyDescription, PropertyDescription, StructDefenition } from './interfaces';
 
 export class StructType extends Type {
@@ -19,42 +19,42 @@ export class StructType extends Type {
 export function defineStruct(structDifinition: StructDefenition): StructType {
     const keys: string[] = Object.keys(structDifinition);
     const layout: Array<PropertyDescription> = new Array(keys.length);
-    let size: number = 0;
+    let offset: number = 0;
     let propertySize: number = 0;
+    let propertyOffset: number = 0;
     let property: string;
 
     for (let i = 0; i < keys.length; i++) {
         property = keys[i];
         propertySize = sizeof(structDifinition[property]);
-        propertySize = propertySize < 8 ? alignBin(propertySize) : alignTo8(propertySize);
-        size += propertySize;
-        layout[i] = { property, size: propertySize };
+        offset += padTo(offset, align(propertySize));
+        layout[i] = { property, offset, size: propertySize };
+        offset += propertySize;
     }
-
-    layout.sort((l, r) => r.size - l.size);
 
     const meta: StructMeta = {};
     const getters: StructGetters = {};
-    let offset = 0;
+    // let offset = 0;
 
     for (let i = 0; i < layout.length; i++) {
-        ({ property, size: propertySize } = layout[i]);
+        ({ property, size: propertySize, offset: propertyOffset } = layout[i]);
         meta[property] = {
-            offset,
+            offset: propertyOffset,
             type: structDifinition[property],
         };
 
         getters[property] = (function () {
-            const _offset: number = offset;
+            const _offset: number = propertyOffset;
             return function (struct: StructP): number {
                 return struct + _offset;
             };
         })();
-
-        offset += propertySize;
     }
-    
-    return new StructType(meta, size ? alignBin(size) : alignTo8(size), getters);
+
+    const last = layout[layout.length - 1];
+    const size = align(last.offset + last.size);
+
+    return new StructType(meta, size, getters);
 }
 
 export function getAddressFromStruct(structType: StructType, struct: StructP, property: string): number {

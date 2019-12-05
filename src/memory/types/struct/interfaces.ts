@@ -27,6 +27,7 @@ export interface StructGetters {
 export interface PropertyDescription { 
     property: string; 
     size: number;
+    offset: number;
 }
 
 export interface FieldsPadding {

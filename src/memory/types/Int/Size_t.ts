@@ -1,5 +1,5 @@
 import { Primitive, Pointer } from '../type';
-import { Allocator, get4Byte, set4Byte } from 'memory/allocator/allocator';
+import { Allocator } from 'memory/allocator/allocator';
 import { toInt32 } from '../../coercion';
 
 export type Size_tP = Pointer;
@@ -11,9 +11,9 @@ Size_t.toString = function toString(): string {
 }
 
 export function getSize_t(a: Allocator, address: Size_tP): number {
-    return get4Byte(a, address);
+    return a.uint32View[address >> 2];
 }
 
 export function setSize_t(a: Allocator, address: Size_tP, v: number): number {
-    return set4Byte(a, address, toInt32(v));
+    return a.uint32View[address >> 2] = v;
 }
