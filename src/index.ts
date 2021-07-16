@@ -80,17 +80,116 @@ const sceneLight: Array<Light> = [
   new DirectionalLight(vec3(0.2, 0.2, 0.2), vec3(1, 4, 4)),
 ];
 
-const now = Date.now();
+const eventStack = {
+  'w': false,
+  's': false,
+  'a': false,
+  'd': false,
+  'space': false,
+  'control': false,
+};
 
-for (let x = -halfCw; x < halfCw; x++) {
-  for (let y = -halfCh; y < halfCh; y++) {
-    const rayDirection: vec3 = canvasToViewport(x, y, Vw, Vh, Cw, Ch, d);
-    const color: vec3 = traceRay(cameraPosition, rayDirection, scene, sceneLight, d, Infinity, 2);
+function render() {
+  requestAnimationFrame(render);
 
-    canvas.putPixel(halfCw + x, halfCh - y - 1, color);
+    if (eventStack['w']) { 
+      cameraPosition.z += 0.5;
+    }
+  
+    if (eventStack['s']) {
+      cameraPosition.z -= 0.5;
+    }
+  
+  
+    if (eventStack['a']) {
+      cameraPosition.x -= 0.5;
+    }
+  
+    if (eventStack['d']) {
+      cameraPosition.x += 0.5;
+    }
+
+
+  if (eventStack['space']) {
+    cameraPosition.y += 0.5;
   }
+
+
+  if (eventStack['control']) {
+    cameraPosition.y -= 0.5;
+  }
+
+  const now = Date.now();
+
+  for (let x = -halfCw; x < halfCw; x++) {
+    for (let y = -halfCh; y < halfCh; y++) {
+      const rayDirection: vec3 = canvasToViewport(x, y, Vw, Vh, Cw, Ch, d);
+      const color: vec3 = traceRay(cameraPosition, rayDirection, scene, sceneLight, d, Infinity, 2);
+
+      canvas.putPixel(halfCw + x, halfCh - y - 1, color);
+    }
+  }
+
+  canvas.render();
+
+  console.log(`time: ${Date.now() - now}`);
 }
 
-canvas.render();
 
-console.log(`time: ${Date.now() - now}`);
+canvas.canvasHTML.addEventListener('keydown', (e) => {
+  if (e.key.toLowerCase() === 'w') { 
+    eventStack['w'] = true;
+  }
+
+  if (e.key.toLowerCase() === 's') {
+    eventStack['s'] = true;
+  }
+
+
+  if (e.key.toLowerCase() === 'a') {
+    eventStack['a'] = true;
+  }
+
+  if (e.key.toLowerCase() === 'd') {
+    eventStack['d'] = true;
+  }
+
+  if (e.key.toLowerCase() === ' ') {
+    eventStack['space'] = true;
+  }
+
+
+  if (e.key.toLowerCase() === 'control') {
+    eventStack['control'] = true;
+  }
+})
+
+canvas.canvasHTML.addEventListener('keyup', (e) => {
+  if (e.key.toLowerCase() === 'w') { 
+    eventStack['w'] = false;
+  }
+
+  if (e.key.toLowerCase() === 's') {
+    eventStack['s'] = false;
+  }
+
+
+  if (e.key.toLowerCase() === 'a') {
+    eventStack['a'] = false;
+  }
+
+  if (e.key.toLowerCase() === 'd') {
+    eventStack['d'] = false;
+  }
+
+  if (e.key.toLowerCase() === ' ') {
+    eventStack['space'] = false;
+  }
+
+
+  if (e.key.toLowerCase() === 'control') {
+    eventStack['control'] = false;
+  }
+})
+
+requestAnimationFrame(render);

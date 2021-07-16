@@ -45,6 +45,7 @@ export class Canvas2D extends Canvas {
     static getCanvas(): Canvas2D {
         if (!Canvas2D.canvas) {
             const canvasHTML: HTMLCanvasElement = document.createElement('canvas');
+            canvasHTML.tabIndex = 0;
             Canvas2D.canvas = new Canvas2D(canvasHTML);
         }
 
